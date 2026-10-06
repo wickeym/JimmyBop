@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <title>Jimmy Bop</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='9' r='6' fill='%23f4fbff'/%3E%3Ccircle cx='5.5' cy='8' r='1.1' fill='%231c2438'/%3E%3Ccircle cx='10.5' cy='8' r='1.1' fill='%231c2438'/%3E%3Cpath d='M6 10.5c.7.8 2.7.8 3.4 0' stroke='%23e23b2f' stroke-width='1.1' fill='none'/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+  <body>
+    <div id="stage">
+      <canvas id="game" width="480" height="270" aria-label="Jimmy Bop game"></canvas>
+      <div id="topbar">
+        <button id="mute" type="button">Sound on</button>
+        <button id="pauseBtn" type="button" hidden>Pause</button>
+      </div>
+      <section id="title" class="overlay">
+        <div>
+          <h1 class="logo"><span class="jimmy">JIMMY</span><span class="bop">BOP</span></h1>
+          <p class="story">
+            No arms. No legs. No plans to become a puddle. Jimmy is Phin’s snowman plush, and the lava is already moving.
+          </p>
+        </div>
+        <div class="card">
+          <div class="tips">
+            <p><strong>1</strong>Run from the lava</p>
+            <p><strong>2</strong>Jump the rocks</p>
+            <p><strong>3</strong>Cool off in ice</p>
+            <p><strong>4</strong>Hop out in time</p>
+          </div>
+          <div class="controls">
+            <span><kbd>Space</kbd> jump</span>
+            <span><kbd>→</kbd> sprint</span>
+            <span><kbd>←</kbd> brake</span>
+            <span><kbd>↓</kbd> drop</span>
+          </div>
+          <div class="row">
+            <button id="play" type="button">Play</button>
+          </div>
+          <p id="best" hidden></p>
+          <p class="credits">
+            <span>Created by <strong>Silas Williams</strong></span>
+            <span>Jimmy Bop is <strong>Phin Looper</strong>’s plush</span>
+          </p>
+        </div>
+      </section>
+      <section id="pause" class="overlay" hidden>
+        <div class="card">
+          <h2>PAUSED</h2>
+          <p class="sub">Frozen on purpose. The lava can wait.</p>
+          <div class="row">
+            <button id="resume" type="button">Resume</button>
+            <button id="quit" type="button">Title</button>
+          </div>
+          <p class="credits">
+            <span>Created by <strong>Silas Williams</strong></span>
+            <span>Jimmy Bop is <strong>Phin Looper</strong>’s plush</span>
+          </p>
+        </div>
+      </section>
+      <section id="over" class="overlay" hidden>
+        <div class="card">
+          <h2>MELTED</h2>
+          <p id="overLine" class="sub">Jimmy turned into a puddle.</p>
+          <p id="overScore" class="sub"></p>
+          <p id="overBest" class="sub"></p>
+          <p class="sub">Phin can restuff him. Probably.</p>
+          <div class="row">
+            <button id="retry" type="button">Try again</button>
+          </div>
+          <p class="credits">
+            <span>Created by <strong>Silas Williams</strong></span>
+            <span>Jimmy Bop is <strong>Phin Looper</strong>’s plush</span>
+          </p>
+        </div>
+      </section>
+      <div id="touch" hidden>
+        <button id="btnSprint" type="button">Sprint</button>
+        <button id="btnJump" type="button">Jump</button>
+      </div>
+    </div>
+    <script type="module" src="js/main.js"></script>
+  </body>
+</html>
