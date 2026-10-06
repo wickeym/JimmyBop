@@ -2,7 +2,7 @@
 
 A side-scrolling lava runner about a snowman plush with no arms, no legs, and a very short fuse.
 
-Jimmy Bop belongs to Phin Looper. The game was created by Silas Williams.
+Jimmy Bop is Phin's best friend. The game was created by Silas.
 
 The lava comes from the left. Jimmy runs, jumps rocks and gaps, and dives into ice holes when he gets too hot. Stay in the ice too long and the lava floods the hole. Three lives. When he melts, he comes back right where it happened.
 
@@ -27,6 +27,6 @@ On a phone, use the Sprint and Jump buttons. Tap the title screen to start.
 
 ## Credits
 
-Created by **Silas Williams**.
+Created by **Silas**.
 
-Jimmy Bop is **Phin Looper**’s plush.
+Jimmy Bop is **Phin**'s best friend.

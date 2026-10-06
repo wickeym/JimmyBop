@@ -45,8 +45,11 @@ function finishMelt(g) {
   }
 }
 
-assert(html.includes("Silas Williams"), "credits missing Silas Williams");
-assert(html.includes("Phin Looper"), "credits missing Phin Looper");
+assert(html.includes("Created by"), "credits missing the author line");
+assert(html.includes(">Silas<"), "credits should name Silas");
+assert(html.includes("Jimmy Bop is Phin"), "title should say Jimmy Bop is Phin’s best friend");
+assert(html.includes("best friend"), "title should call Jimmy Phin’s best friend");
+assert(!html.includes("Williams") && !html.includes("Looper"), "last names should be removed");
 assert(AIR_TIME > 0.5 && AIR_TIME < 0.8, `air time out of range: ${AIR_TIME}`);
 
 const layout = createGame(1);
