@@ -15,10 +15,13 @@
 html, body {
   margin: 0;
   height: 100%;
+  height: 100dvh;
   background:
     radial-gradient(1200px 500px at 50% -10%, #ffb067 0%, transparent 55%),
     radial-gradient(900px 600px at 80% 110%, #ff4d1a 0%, transparent 40%),
     #1a1030;
+  touch-action: none;
+  overscroll-behavior: none;
 }
 
 body {
@@ -27,6 +30,12 @@ body {
   overflow: hidden;
   user-select: none;
   -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  padding:
+    env(safe-area-inset-top)
+    env(safe-area-inset-right)
+    env(safe-area-inset-bottom)
+    env(safe-area-inset-left);
 }
 
 #stage {
@@ -178,6 +187,14 @@ button:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
   margin: 4px 0 8px;
 }
 
+.phone-note {
+  display: none;
+  margin: 4px 0 8px;
+  text-align: center;
+  font-family: "Trebuchet MS", sans-serif;
+  font-size: 13px;
+}
+
 kbd {
   display: inline-block;
   min-width: 1.4em;
@@ -248,23 +265,46 @@ kbd {
 
 #touch {
   position: absolute;
-  left: 10px;
-  right: 10px;
-  bottom: 10px;
+  inset: 0;
   display: flex;
   justify-content: space-between;
+  align-items: flex-end;
+  padding: 10px 10px calc(10px + env(safe-area-inset-bottom));
   pointer-events: none;
   z-index: 4;
 }
 
-#touch button {
-  pointer-events: auto;
-  min-width: 92px;
-  font-size: 16px;
-  background: rgba(255, 183, 3, 0.92);
+.pad {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  pointer-events: none;
 }
 
-#btnJump { min-width: 120px; background: #8fd4ff; }
+#touch button {
+  pointer-events: auto;
+  touch-action: none;
+  min-width: 76px;
+  min-height: 56px;
+  font-size: 15px;
+  background: rgba(255, 183, 3, 0.9);
+}
+
+#btnJump {
+  width: 92px;
+  height: 92px;
+  min-width: 92px;
+  border-radius: 50%;
+  background: #8fd4ff;
+  font-size: 18px;
+}
+#btnSprint { min-width: 88px; min-height: 64px; }
+#btnPhin { background: #6ea8ff; }
+#btnDrop { background: rgba(255, 247, 232, 0.92); }
+
+#rotate {
+  display: none;
+}
 
 @media (max-width: 720px) {
   .tips { grid-template-columns: 1fr 1fr; }
@@ -272,6 +312,41 @@ kbd {
   .story { display: none; }
 }
 
+@media (max-height: 430px) {
+  .story, .credits { display: none; }
+  #title { padding: 8px 10px; }
+  .logo { font-size: 34px; margin: 0; }
+  .logo .jimmy, .logo .bop { -webkit-text-stroke: 3px #172033; }
+  .tips p { padding: 4px; font-size: 10px; }
+  .card { padding: 6px 8px; box-shadow: 0 4px 0 #172033; }
+  .phone-note { margin-bottom: 4px; }
+}
+
+@media (pointer: coarse) {
+  .controls { display: none; }
+  .phone-note { display: block; }
+  #topbar button { min-height: 40px; font-size: 14px; }
+  canvas { border-radius: 0; box-shadow: none; }
+}
+
 @media (hover: hover) and (pointer: fine) {
   #touch { display: none; }
+}
+
+@media (orientation: portrait) and (pointer: coarse) {
+  #rotate {
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: #1a1030;
+    color: white;
+    text-align: center;
+    font-size: 28px;
+    line-height: 1.25;
+    letter-spacing: 0;
+  }
 }

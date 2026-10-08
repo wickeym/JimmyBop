@@ -89,6 +89,16 @@ export function createAudio() {
       tone(990, 0.14, "triangle", 0.05);
     }
     else if (name === "melt") tone(392, 0.45, "sawtooth", 0.06, 70);
+    else if (name === "phin") {
+      tone(392, 0.08, "triangle", 0.07);
+      tone(523, 0.1, "triangle", 0.06);
+      tone(784, 0.16, "triangle", 0.06);
+    }
+    else if (name === "level") {
+      tone(523, 0.09, "triangle", 0.06);
+      tone(659, 0.12, "triangle", 0.06);
+      tone(880, 0.18, "triangle", 0.06);
+    }
     else if (name === "respawn") {
       tone(523, 0.08, "triangle", 0.05);
       tone(659, 0.1, "triangle", 0.05);

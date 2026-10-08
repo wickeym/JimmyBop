@@ -23,12 +23,39 @@ export function jumpReach(speed) {
   return Math.abs(speed) * AIR_TIME;
 }
 
-export function difficultyOf(runX) {
-  return clamp((runX - 700) / 4600, 0, 1);
+export const LEVEL_METERS = 350;
+
+const LEVEL_NAMES = [
+  "Snowfield",
+  "Cinder Slope",
+  "Ash Flats",
+  "Ember Ridge",
+  "Magma Coast",
+  "Furnace Road",
+  "The Caldera",
+  "Obsidian Mile",
+];
+
+export function levelLook(meters) {
+  const m = Math.max(0, meters);
+  const index = Math.floor(m / LEVEL_METERS);
+  const number = index + 1;
+  const name = index < LEVEL_NAMES.length ? LEVEL_NAMES[index] : `Inferno ${number}`;
+  return { index, number, name, frac: (m % LEVEL_METERS) / LEVEL_METERS, meters: m };
 }
 
-export function cruiseOf(d) {
-  return 188 + d * 104;
+// Keeps climbing with distance. Early on this stays gentle; it does not flatten out.
+export function pressureOf(runX) {
+  const meters = Math.max(0, (runX - 150) / 8);
+  return (meters / LEVEL_METERS) * 0.4;
+}
+
+export function difficultyOf(runX) {
+  return pressureOf(runX);
+}
+
+export function cruiseOf(pressure) {
+  return 186 + pressure * 80;
 }
 
 function mulberry32(seed) {
@@ -126,6 +153,7 @@ function pushSegment(g, spec) {
       });
     }
   }
+  considerMarker(g, seg);
   g.segments.push(seg);
   g.genX += spec.w;
   g.lastKind = spec.kind;
@@ -153,37 +181,55 @@ const INTRO = [
   { kind: "ground", w: 340, coins: 3 },
 ];
 
-function randomObs(rng, d) {
+function randomObs(rng, pressure) {
   const r = rng();
-  if (r < 0.34) return { k: "crate", w: 22, h: 22 };
-  if (r < 0.62) return { k: "rock", w: 32, h: 16 };
-  const tall = 34 + Math.floor(rng() * (d > 0.5 ? 16 : 10));
+  if (r < 0.26) return { k: "crate", w: 22, h: 22 };
+  if (r < 0.48) return { k: "lamp", w: 16, h: 28 };
+  if (r < 0.7) return { k: "rock", w: 32, h: 16 };
+  const extra = Math.min(18, Math.floor(pressure * 8));
+  const tall = 32 + Math.floor(rng() * (10 + extra));
   return { k: "pillar", w: 18, h: tall };
 }
 
+function considerMarker(g, seg) {
+  if (seg.kind === "gap") return;
+  const span = LEVEL_METERS * 8;
+  const bx = 150 + g.nextMarkerN * span;
+  if (seg.x + seg.w < bx + 24) return;
+  if (seg.kind !== "ground") return;
+  const x = clamp(Math.max(bx, seg.x + 36), seg.x + 36, seg.x + seg.w - 36);
+  if (x <= seg.x || x >= seg.x + seg.w) return;
+  const look = levelLook(g.nextMarkerN * LEVEL_METERS);
+  seg.marker = { x, level: look.number, name: look.name };
+  g.nextMarkerN += 1;
+}
+
 function addProcedural(g) {
-  const d = difficultyOf(g.genX);
+  const d = pressureOf(g.genX);
   const cruise = cruiseOf(d);
   const reach = jumpReach(cruise);
+  const sprintReach = jumpReach(cruise * 1.25);
   const sincePit = g.genX - g.lastPitX;
   const roll = g.rng();
+  const pitEvery = cruise * 3.35;
   let kind = "ground";
-  if (sincePit > 700) kind = "pit";
-  else if (sincePit > 380 && roll < 0.34) kind = "pit";
-  else if (roll < 0.22) kind = "gap";
+  if (sincePit > pitEvery) kind = "pit";
+  else if (sincePit > pitEvery * 0.55 && roll < 0.36) kind = "pit";
+  else if (roll < 0.22 + Math.min(d, 1.4) * 0.06) kind = "gap";
 
   if ((kind === "gap" || kind === "pit") && (g.lastKind === "gap" || g.lastKind === "pit")) {
     kind = "ground";
   }
 
   if (kind === "gap") {
-    const w = Math.round(clamp(reach * (0.5 + g.rng() * 0.12), 56, 108));
+    const widen = Math.min(d, 2) * 0.035;
+    const w = Math.round(clamp(reach * (0.5 + widen + g.rng() * 0.12), 56, reach * 0.8));
     pushSegment(g, { kind, w, arc: g.rng() < 0.75 });
     return;
   }
 
   if (kind === "pit") {
-    const w = Math.round(clamp(reach * (0.72 + g.rng() * 0.1), 84, 140));
+    const w = Math.round(clamp(reach * (0.7 + g.rng() * 0.1), 84, reach * 0.9));
     pushSegment(g, { kind, w, sign: g.rng() < 0.35 ? "ICE" : null });
     return;
   }
@@ -198,18 +244,19 @@ function addProcedural(g) {
     pad = 150;
   }
   const spec = { kind: "ground", w, obs: [] };
-  const endPad = Math.round(190 + d * 60);
-  if (w > pad + endPad + 40 && g.rng() < 0.55 + d * 0.35) {
+  const endPad = Math.round(Math.max(180, sprintReach * 0.82));
+  if (w > pad + endPad + 40 && g.rng() < 0.48 + Math.min(d, 2) * 0.22) {
     let cursor = pad;
     const limit = w - endPad;
+    const spacing = Math.round(Math.max(150, sprintReach * 0.7));
     let guard = 0;
     while (cursor < limit - 30 && guard < 3) {
       guard += 1;
       const o = randomObs(g.rng, d);
       if (cursor + o.w > limit) break;
       spec.obs.push({ ...o, at: Math.round(cursor) });
-      cursor += o.w + 170 + Math.floor(g.rng() * 50);
-      if (g.rng() > 0.42 + d * 0.2) break;
+      cursor += o.w + spacing + Math.floor(g.rng() * 40);
+      if (g.rng() > 0.38 + Math.min(d, 1.6) * 0.2) break;
     }
   }
   if (!spec.obs.length) delete spec.obs;
@@ -217,8 +264,8 @@ function addProcedural(g) {
   pushSegment(g, spec);
 }
 
-export function generate(g) {
-  const target = Math.max(g.player.x, 0) + 1700;
+export function generate(g, ahead = 1700) {
+  const target = Math.max(g.player.x, 0) + ahead;
   let guard = 0;
   while (g.genX < target && guard < 80) {
     guard += 1;
@@ -249,6 +296,11 @@ export function createGame(seed = 7) {
     toasts: [],
     sfx: [],
     coins: 0,
+    helps: 1,
+    helpMarks: 0,
+    helpNag: 0,
+    phin: null,
+    hintedHelp: false,
     style: 0,
     runX: 150,
     meters: 0,
@@ -265,7 +317,13 @@ export function createGame(seed = 7) {
     wasClose: false,
     spicy: false,
     banner: "",
+    bannerSub: "",
     bannerT: 0,
+    levelNumber: 1,
+    levelName: "Snowfield",
+    announcedLevel: 1,
+    nextMarkerN: 1,
+    trail: [],
     needsReset: false,
     jumps: 0,
     pitVisits: 0,
@@ -450,6 +508,7 @@ function kill(g, reason) {
   g.sfx.push("melt");
   if (g.mode === "run") p.lives = Math.max(0, p.lives - 1);
   g.deathLog.push({ reason, x: p.x, t: g.time, lives: p.lives });
+  g.phin = null;
   g.meltBits = [
     { k: "nose", x: p.x + 6, y: p.y - 16, vx: 110, vy: -260, rot: 0 },
     { k: "muff", x: p.x - 14, y: p.y - 22, vx: -90, vy: -200, rot: 0 },
@@ -540,7 +599,15 @@ function stepDecor(g, dt) {
     q.y += q.vy * dt;
     if (q.life <= 0 || q.y > VIEW_H + 20) g.particles.splice(i, 1);
   }
-  if (g.particles.length > 240) g.particles.splice(0, g.particles.length - 240);
+  if (g.particles.length > 300) {
+    for (let i = 0; i < g.particles.length && g.particles.length > 300; i++) {
+      if (g.particles[i].snow) {
+        g.particles.splice(i, 1);
+        i -= 1;
+      }
+    }
+    if (g.particles.length > 300) g.particles.splice(0, g.particles.length - 300);
+  }
   for (let i = g.floaters.length - 1; i >= 0; i--) {
     const f = g.floaters[i];
     f.life -= dt;
@@ -549,6 +616,243 @@ function stepDecor(g, dt) {
   }
   for (const t of g.toasts) t.life -= dt;
   g.toasts = g.toasts.filter((t) => t.life > 0);
+  if (g.trail) {
+    for (let i = g.trail.length - 1; i >= 0; i--) {
+      g.trail[i].life -= dt;
+      if (g.trail[i].life <= 0) g.trail.splice(i, 1);
+    }
+  }
+}
+
+function syncPlace(g) {
+  g.runX = Math.max(g.runX, g.player.x);
+  g.meters = Math.max(0, Math.floor((g.runX - 150) / 8));
+  const place = levelLook(g.meters);
+  g.levelNumber = place.number;
+  g.levelName = place.name;
+  if (g.mode === "run" && place.number > g.announcedLevel) {
+    g.announcedLevel = place.number;
+    g.banner = `LEVEL ${place.number}`;
+    g.bannerSub = place.name;
+    g.bannerT = 1.7;
+    g.style += 40;
+    g.sfx.push("level");
+  }
+  g.score = g.meters + g.coins * 25 + g.style;
+  if (g.mode === "run" && g.score > g.best) g.best = g.score;
+}
+
+function refreshHelps(g) {
+  const marks = Math.floor(g.coins / 50);
+  if (marks <= g.helpMarks) return;
+  g.helps += marks - g.helpMarks;
+  g.helpMarks = marks;
+  if (g.mode === "run") {
+    toast(g, "PHIN CAN HELP");
+    g.sfx.push("phin");
+  }
+}
+
+function findRescuePit(g) {
+  generate(g, 2800);
+  const p = g.player;
+  for (const s of g.segments) {
+    if (s.kind !== "pit") continue;
+    const mid = s.x + s.w * 0.5;
+    if (mid < p.x + 64) continue;
+    if (s.fill > 0.3) continue;
+    return s;
+  }
+  return null;
+}
+
+function rescueFloor(g, x, pitLeft) {
+  if (x >= pitLeft - 6) return null;
+  const s = segmentAt(g, x);
+  if (!s || s.kind !== "ground") return null;
+  let y = s.y;
+  for (const o of s.obs) {
+    if (x > o.x - 4 && x < o.x + o.w + 8) y = Math.min(y, s.y - o.h);
+  }
+  return y;
+}
+
+function rescueHop(g, x, pitLeft) {
+  const speed = 340;
+  for (const s of g.segments) {
+    if (s.x + s.w < x) continue;
+    if (s.x > x + 200) break;
+    if (s.kind === "pit" && s.x >= pitLeft - 8) break;
+    if (s.kind === "gap" || s.kind === "pit") {
+      const lip = s.x - x;
+      const far = s.x + s.w + 18 - x;
+      if (lip < 32 && lip > -8) {
+        const vy = Math.min(740, Math.max(420, (far / speed) * GRAVITY * 0.5));
+        return -vy;
+      }
+    }
+    if (s.kind === "ground") {
+      for (const o of s.obs) {
+        if (o.x + o.w < x + 2) continue;
+        if (o.h > 8 && o.x - x < 42 && o.x - x > -4) return -560;
+      }
+    }
+  }
+  return 0;
+}
+
+function tryRescue(g) {
+  if (g.mode !== "run" || g.state !== "play" || g.phin) return;
+  if (g.helps <= 0) {
+    if (g.helpNag <= 0) {
+      g.helpNag = 1.4;
+      toast(g, "50 COINS FOR PHIN");
+    }
+    return;
+  }
+  const pit = findRescuePit(g);
+  if (pit == null) {
+    if (g.helpNag <= 0) {
+      g.helpNag = 1.2;
+      toast(g, "NO ICE NEARBY");
+    }
+    return;
+  }
+  const p = g.player;
+  g.helps -= 1;
+  g.style += 25;
+  g.phin = {
+    phase: "drop",
+    t: 0,
+    x: p.x - 8,
+    y: 78,
+    fromX: p.x - 8,
+    fromY: 78,
+    pitX: pit.x + pit.w * 0.5,
+    pitLeft: pit.x,
+    vy: 0,
+  };
+  p.vx = 0;
+  p.vy = 0;
+  if (g.banner === "RUN!") g.bannerT = 0;
+  g.sfx.push("phin");
+  toast(g, "PHIN!");
+}
+
+function stepLeap(g, dt) {
+  const r = g.phin;
+  if (!r || r.phase !== "leap") return;
+  r.t += dt;
+  const u = r.t / 0.48;
+  r.x = r.fromX + 80 * u;
+  r.y = r.fromY - 40 * u - 220 * u * u;
+  if (u >= 1) g.phin = null;
+}
+
+function stepRescue(g, dt) {
+  const p = g.player;
+  const r = g.phin;
+  r.t += dt;
+  p.mercy = Math.max(p.mercy, 0.25);
+  p.vx = 0;
+  p.vy = 0;
+
+  if (r.phase === "drop") {
+    const u = Math.min(1, r.t / 0.34);
+    const aimY = p.y - 30;
+    r.x = r.fromX + (p.x - r.fromX) * u;
+    r.y = r.fromY + (aimY - r.fromY) * (u * u);
+    if (u >= 1) {
+      r.phase = "carry";
+      r.t = 0;
+      r.x = p.x - 16;
+      const floor = rescueFloor(g, r.x, r.pitLeft);
+      r.y = floor == null ? Math.min(p.y, GROUND_Y) : floor;
+      r.vy = floor == null ? -480 : 0;
+      g.sfx.push("boing");
+    }
+  } else if (r.phase === "carry") {
+    const speed = 340;
+    r.x += speed * dt;
+    if (r.x > r.pitLeft - 20) r.x = r.pitLeft - 20;
+    r.vy = Math.min(MAX_FALL, (r.vy || 0) + GRAVITY * dt);
+    r.y += r.vy * dt;
+    const floor = rescueFloor(g, r.x, r.pitLeft);
+    if (floor != null && r.vy >= 0 && r.y >= floor) {
+      if (r.vy > 80) g.sfx.push("land");
+      r.y = floor;
+      r.vy = 0;
+    }
+    if (r.vy === 0 && floor != null) {
+      const hop = rescueHop(g, r.x, r.pitLeft);
+      if (hop) {
+        r.vy = hop;
+        r.y -= 1;
+        g.sfx.push("jump");
+      } else {
+        p.runPhase += dt * 16;
+      }
+    }
+    p.x = r.x + 18;
+    p.y = r.y;
+    p.onGround = r.vy === 0 && r.y >= GROUND_Y - 2;
+    p.inPit = false;
+    p.heat = Math.max(24, p.heat - 8 * dt);
+    g.lavaX += 64 * dt;
+    const atLip = r.x >= r.pitLeft - 22 && r.vy >= 0 && r.y >= GROUND_Y - 6;
+    if (atLip || r.t > 6.5) {
+      r.phase = "land";
+      r.t = 0;
+      r.vy = 0;
+      r.x = r.pitLeft - 14;
+      r.y = GROUND_Y;
+    }
+  } else if (r.phase === "land") {
+    const u = Math.min(1, r.t / 0.24);
+    const floor = GROUND_Y + PIT_DEPTH;
+    r.x = r.pitLeft - 14;
+    r.y = GROUND_Y;
+    r.vy = 0;
+    p.x = r.pitX;
+    p.y = GROUND_Y + (floor - GROUND_Y) * u;
+    if (u >= 1) {
+      p.x = r.pitX;
+      p.y = floor;
+      p.vx = 20;
+      p.vy = 0;
+      p.onGround = true;
+      p.inPit = true;
+      p.hopping = 0;
+      p.heat = Math.min(p.heat, 42);
+      p.mercy = 0.45;
+      g.lavaX = p.x - 188;
+      g.pitVisits += 1;
+      g.sfx.push("splash");
+      if (!g.hintedOut) {
+        g.hintedOut = true;
+        toast(g, "NOW JUMP OUT");
+      } else toast(g, "COOL OFF!");
+      burst(g, p.x, p.y - 6, 8, "#d7f6ff", 90);
+      r.phase = "leap";
+      r.t = 0;
+      r.fromX = r.x;
+      r.fromY = floor - 8;
+    }
+  }
+
+  for (const s of g.segments) {
+    if (s.kind === "pit") s.fill = clamp((g.lavaX - s.x) / s.w, 0, 1);
+    for (const c of s.coins) {
+      if (c.got) continue;
+      if (Math.abs(c.x - p.x) < 28 && Math.abs(c.y - (p.y - 14)) < 36) {
+        c.got = true;
+        g.coins += 1;
+        g.sfx.push("coin");
+      }
+    }
+  }
+  syncPlace(g);
+  refreshHelps(g);
 }
 
 function stepPlay(g, dt, input) {
@@ -556,6 +860,23 @@ function stepPlay(g, dt, input) {
   const wasPit = p.inPit;
   g.time += dt;
   if (g.bannerT > 0) g.bannerT -= dt;
+  g.helpNag = Math.max(0, g.helpNag - dt);
+  if (g.mode === "run" && !g.hintedHelp && g.time > 2.2 && !g.phin) {
+    g.hintedHelp = true;
+    toast(g, "F CALLS PHIN");
+  }
+  if (input.help) tryRescue(g);
+  if (g.phin && g.phin.phase !== "leap") {
+    stepRescue(g, dt);
+    let cam = p.x - 206;
+    if (cam < 0) cam = 0;
+    g.camX += (cam - g.camX) * Math.min(1, dt * 9);
+    g.shake = Math.max(0, g.shake - dt * 10);
+    generate(g);
+    stepDecor(g, dt);
+    return;
+  }
+  if (g.phin) stepLeap(g, dt);
 
   const d = difficultyOf(g.runX);
   const cruise = cruiseOf(d);
@@ -639,7 +960,7 @@ function stepPlay(g, dt, input) {
   else p.runPhase += dt * 3;
 
   let lead = p.x - g.lavaX;
-  let rate = 6.4 + d * 5.2;
+  let rate = 6.2 + Math.min(d, 3) * 3.6;
   if (lead < 190) rate += ((190 - Math.max(0, lead)) / 190) * 16;
   if (sprinting) rate += 2.6;
   if (p.inPit && p.onGround) rate = -48;
@@ -648,9 +969,9 @@ function stepPlay(g, dt, input) {
   g.heatMax = Math.max(g.heatMax, p.heat);
   g.heatMin = Math.min(g.heatMin, p.heat);
 
-  const desired = 236 - d * 56;
-  let lspd = 124 + d * 28;
-  if (p.inPit && p.onGround) lspd = 102 + d * 22;
+  const desired = Math.max(168, 240 - d * 34);
+  let lspd = 120 + Math.min(d, 3) * 16;
+  if (p.inPit && p.onGround) lspd = 100 + Math.min(d, 2.6) * 18;
   else if (lead > desired) {
     const extra = Math.min(p.mercy > 0 ? 70 : 150, (lead - desired) * 0.8);
     lspd = Math.max(lspd, p.vx + extra);
@@ -692,6 +1013,7 @@ function stepPlay(g, dt, input) {
         g.coins += 1;
         g.sfx.push("coin");
         g.floaters.push({ text: "+25", x: c.x, y: c.y, life: 0.7, max: 0.7 });
+        refreshHelps(g);
       }
     }
     if (s.kind === "ground") {
@@ -709,10 +1031,8 @@ function stepPlay(g, dt, input) {
     g.checkpoint.y = p.y;
   }
 
-  g.runX = Math.max(g.runX, p.x);
-  g.meters = Math.max(0, Math.floor((g.runX - 150) / 8));
-  g.score = g.meters + g.coins * 25 + g.style;
-  if (g.mode === "run" && g.score > g.best) g.best = g.score;
+  syncPlace(g);
+  refreshHelps(g);
 
   const close = lead < 58 && lead > 6 && !p.inPit && p.mercy <= 0;
   if (close && !g.wasClose) {
@@ -724,7 +1044,7 @@ function stepPlay(g, dt, input) {
   g.wasClose = close;
   g.spicy = close;
 
-  if (g.mode === "run" && !g.hintedPit && p.x > 760) {
+  if (g.mode === "run" && !g.hintedPit && p.x > 760 && !p.inPit) {
     g.hintedPit = true;
     toast(g, "DIVE IN TO COOL");
   }
@@ -733,18 +1053,48 @@ function stepPlay(g, dt, input) {
     toast(g, "FIND AN ICE HOLE");
   }
 
-  if (p.heat > 58 && Math.random() < dt * (p.heat - 50) * 0.2) {
-    g.particles.push({
-      x: p.x + (Math.random() - 0.5) * 8,
-      y: p.y - 24,
-      vx: (Math.random() - 0.5) * 12,
-      vy: -28 - Math.random() * 18,
-      life: 0.55,
-      max: 0.55,
-      color: "rgba(255,255,255,0.85)",
-      r: 1.5 + Math.random(),
-      grav: -20,
-    });
+  const wet = p.inPit ? 0 : clamp((p.heat - 36) / 48, 0, 1);
+  if (wet > 0 && p.mercy <= 0) {
+    if (Math.random() < dt * (8 + wet * 34)) {
+      g.particles.push({
+        drip: true,
+        x: p.x - 1 + (Math.random() - 0.5) * 7,
+        y: p.y - 7 - Math.random() * 8,
+        vx: -22 - wet * 70,
+        vy: 16 + Math.random() * 36,
+        life: 0.62,
+        max: 0.62,
+        color: wet > 0.6 ? "rgba(150,214,255,0.95)" : "rgba(214,242,255,0.92)",
+        r: 1.15 + wet * 1.7,
+        grav: 780,
+      });
+    }
+    if (wet > 0.45 && Math.random() < dt * 10) {
+      g.particles.push({
+        drip: true,
+        x: p.x + 3,
+        y: p.y - 4,
+        vx: -40 - wet * 30,
+        vy: 8,
+        life: 0.5,
+        max: 0.5,
+        color: "rgba(186,230,255,0.85)",
+        r: 1 + wet,
+        grav: 900,
+      });
+    }
+    if (p.onGround) {
+      const last = g.trail[g.trail.length - 1];
+      if (!last || p.x - last.x > 4) {
+        g.trail.push({
+          x: p.x - 7,
+          y: p.y - 1,
+          life: 0.42 + wet * 0.7,
+          w: 1.5 + wet * 5,
+        });
+        if (g.trail.length > 56) g.trail.shift();
+      }
+    }
   }
   if (p.inPit && Math.random() < dt * 10) {
     g.particles.push({

@@ -2,8 +2,13 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#1a1030" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>Jimmy Bop</title>
+    <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='9' r='6' fill='%23f4fbff'/%3E%3Ccircle cx='5.5' cy='8' r='1.1' fill='%231c2438'/%3E%3Ccircle cx='10.5' cy='8' r='1.1' fill='%231c2438'/%3E%3Cpath d='M6 10.5c.7.8 2.7.8 3.4 0' stroke='%23e23b2f' stroke-width='1.1' fill='none'/%3E%3C/svg%3E" />
     <link rel="stylesheet" href="css/style.css" />
   </head>
@@ -25,15 +30,17 @@
           <div class="tips">
             <p><strong>1</strong>Run from the lava</p>
             <p><strong>2</strong>Jump the rocks</p>
-            <p><strong>3</strong>Cool off in ice</p>
-            <p><strong>4</strong>Hop out in time</p>
+            <p><strong>3</strong>Cool off, hop out</p>
+            <p><strong>4</strong>F calls Phin</p>
           </div>
           <div class="controls">
             <span><kbd>Space</kbd> jump</span>
             <span><kbd>→</kbd> sprint</span>
             <span><kbd>←</kbd> brake</span>
             <span><kbd>↓</kbd> drop</span>
+            <span><kbd>F</kbd> Phin</span>
           </div>
+          <p class="phone-note">Hold Jump and Sprint. Tap Phin when Jimmy is melting.</p>
           <div class="row">
             <button id="play" type="button">Play</button>
           </div>
@@ -75,9 +82,17 @@
         </div>
       </section>
       <div id="touch" hidden>
-        <button id="btnSprint" type="button">Sprint</button>
-        <button id="btnJump" type="button">Jump</button>
+        <div class="pad left">
+          <button id="btnBrake" type="button">Brake</button>
+          <button id="btnSprint" type="button">Sprint</button>
+        </div>
+        <div class="pad right">
+          <button id="btnDrop" type="button">Drop</button>
+          <button id="btnPhin" type="button">Phin</button>
+          <button id="btnJump" type="button">Jump</button>
+        </div>
       </div>
+      <div id="rotate">Turn your phone sideways</div>
     </div>
     <script type="module" src="js/main.js"></script>
   </body>

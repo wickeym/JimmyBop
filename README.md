@@ -8,6 +8,8 @@ The lava comes from the left. Jimmy runs, jumps rocks and gaps, and dives into i
 
 ## Play
 
+On a phone or computer: https://wickeym.github.io/JimmyBop/
+
 From this folder:
 
 ```bash
@@ -20,10 +22,11 @@ Open http://localhost:5179
 - **→** or **D** — sprint
 - **←** or **A** — brake
 - **↓** or **S** — drop faster into an ice hole
+- **F** — call Phin (one ride to start, another every 50 coins)
 - **P** or **Esc** — pause
 - **M** — mute
 
-On a phone, use the Sprint and Jump buttons. Tap the title screen to start.
+On a phone, turn sideways. Hold Jump and Sprint, and tap Phin when Jimmy is too hot. Tap the title screen to start.
 
 ## Credits
 

@@ -7,6 +7,13 @@ export function createBot() {
   return function bot(g, dt) {
     const p = g.player;
     const look = lookAhead(g);
+    if (!g.phin && g.helps > 0 && g.mode === "run") {
+      const cooked = p.heat > 86;
+      const caught = !p.inPit && look.lead < 46 && p.mercy <= 0;
+      if (cooked || caught) {
+        return { jumpHeld: false, jumpPressed: false, sprint: false, brake: false, drop: false, help: true };
+      }
+    }
     let want = false;
     let sprint = false;
     let drop = false;
@@ -17,7 +24,7 @@ export function createBot() {
     } else if (p.onGround) {
       const spd = Math.max(p.vx, look.cruise * 0.98);
       const pitNear = look.pit && look.pit.dist < 36 && look.pit.dist > -8;
-      const soak = pitNear && (!look.pit.skippable || p.heat > 46);
+      const soak = pitNear && (!look.pit.skippable || p.heat > 40);
       if (soak) {
         want = false;
         drop = look.pit.dist < 24;
@@ -28,7 +35,7 @@ export function createBot() {
       if (!want && !soak && look.obs && look.obs.dist < 40 && look.obs.dist > 6 && p.y > look.obs.top + 3) {
         want = true;
       }
-      if (!want && pitNear && look.pit.skippable && p.heat <= 46) {
+      if (!want && pitNear && look.pit.skippable && p.heat <= 40) {
         const maxDist = Math.min(42, jumpReach(spd) - look.pit.w - 8);
         if (look.pit.dist < maxDist && look.pit.dist > 4) want = true;
       }

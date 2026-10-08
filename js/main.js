@@ -21,15 +21,21 @@ const overLine = document.getElementById("overLine");
 const overBest = document.getElementById("overBest");
 
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const touchUI = window.matchMedia("(pointer: coarse), (hover: none)").matches;
 const audio = createAudio();
 const keys = { jump: false, sprint: false, brake: false, drop: false };
 let jumpQueued = false;
+let helpQueued = false;
 let pointerJump = false;
-let touchJump = false;
-let touchSprint = false;
+let canvasPointer = null;
+const held = { jump: false, sprint: false, brake: false, drop: false };
 
 let best = Number(localStorage.getItem("jimmy-bop-best") || 0);
 if (!Number.isFinite(best)) best = 0;
+let bestMeters = Number(localStorage.getItem("jimmy-bop-best-meters") || 0);
+if (!Number.isFinite(bestMeters)) bestMeters = 0;
+let bestLevel = Number(localStorage.getItem("jimmy-bop-best-level") || 1);
+if (!Number.isFinite(bestLevel) || bestLevel < 1) bestLevel = 1;
 audio.setMuted(localStorage.getItem("jimmy-bop-mute") === "1");
 
 let game = createGame(7);
@@ -40,17 +46,30 @@ let last = performance.now();
 let shownOver = false;
 
 function fit() {
-  const scale = Math.min(window.innerWidth / VIEW_W, window.innerHeight / VIEW_H);
-  canvas.style.width = `${VIEW_W * scale}px`;
-  canvas.style.height = `${VIEW_H * scale}px`;
+  const view = window.visualViewport;
+  const w = view ? view.width : window.innerWidth;
+  const h = view ? view.height : window.innerHeight;
+  const scale = Math.min(w / VIEW_W, h / VIEW_H);
+  canvas.style.width = `${Math.floor(VIEW_W * scale)}px`;
+  canvas.style.height = `${Math.floor(VIEW_H * scale)}px`;
 }
 window.addEventListener("resize", fit);
+window.visualViewport?.addEventListener("resize", fit);
 fit();
+document.addEventListener("touchmove", (e) => e.preventDefault(), { passive: false });
+document.addEventListener("contextmenu", (e) => e.preventDefault());
 
 function saveBest() {
-  if (game.mode === "run" && game.best > best) {
+  if (game.mode !== "run") return;
+  if (game.best > best) {
     best = game.best;
     localStorage.setItem("jimmy-bop-best", String(best));
+  }
+  if (game.meters > bestMeters) {
+    bestMeters = game.meters;
+    bestLevel = game.levelNumber || 1;
+    localStorage.setItem("jimmy-bop-best-meters", String(bestMeters));
+    localStorage.setItem("jimmy-bop-best-level", String(bestLevel));
   }
 }
 
@@ -88,16 +107,16 @@ function syncUI() {
   overEl.hidden = game.state !== "over";
   touchEl.hidden = game.mode !== "run" || game.state === "over" || game.state === "pause";
   pauseBtn.hidden = game.mode !== "run" || game.state === "over";
-  bestEl.hidden = !(best > 0);
-  bestEl.textContent = best > 0 ? `Best score ${best}` : "";
+  bestEl.hidden = !(bestMeters > 0);
+  bestEl.textContent = bestMeters > 0 ? `Best: Level ${bestLevel} · ${bestMeters} m` : "";
   if (game.state === "over" && !shownOver) {
     shownOver = true;
     saveBest();
   }
   if (game.state === "over") {
-    overScore.textContent = `${game.score} points  ·  ${game.meters} m  ·  ${game.coins} coins`;
+    overScore.textContent = `Level ${game.levelNumber} · ${game.levelName}  ·  ${game.meters} m  ·  ${game.coins} coins`;
     overLine.textContent = game.line || "Jimmy melted.";
-    overBest.textContent = `Best ${Math.max(best, game.best)}`;
+    overBest.textContent = `Best: Level ${Math.max(bestLevel, game.levelNumber)} · ${Math.max(bestMeters, game.meters)} m`;
   }
   syncMute();
 }
@@ -123,19 +142,37 @@ muteBtn.addEventListener("click", (e) => {
   syncMute();
 });
 
-document.getElementById("btnJump").addEventListener("pointerdown", (e) => {
-  e.preventDefault();
-  touchJump = true;
+function holdButton(id, key, onPress) {
+  const el = document.getElementById(id);
+  const ids = new Set();
+  const press = (e) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    try { el.setPointerCapture(e.pointerId); } catch { /* already captured or a synthetic tap */ }
+    const first = ids.size === 0;
+    ids.add(e.pointerId);
+    held[key] = true;
+    if (first && onPress) onPress();
+    audio.resume();
+  };
+  const release = (e) => {
+    ids.delete(e.pointerId);
+    if (ids.size === 0) held[key] = false;
+  };
+  el.addEventListener("pointerdown", press);
+  el.addEventListener("pointerup", release);
+  el.addEventListener("pointercancel", release);
+}
+
+holdButton("btnJump", "jump", () => {
   jumpQueued = true;
 });
-document.getElementById("btnSprint").addEventListener("pointerdown", (e) => {
-  e.preventDefault();
-  touchSprint = true;
-});
-window.addEventListener("pointerup", () => {
-  touchJump = false;
-  touchSprint = false;
-  pointerJump = false;
+holdButton("btnSprint", "sprint");
+holdButton("btnBrake", "brake");
+holdButton("btnDrop", "drop");
+holdButton("btnPhin", "phin", () => {
+  helpQueued = true;
 });
 
 canvas.addEventListener("pointerdown", (e) => {
@@ -148,8 +185,20 @@ canvas.addEventListener("pointerdown", (e) => {
     beginRun();
     return;
   }
+  if (game.state === "pause") return;
+  canvasPointer = e.pointerId;
   pointerJump = true;
   jumpQueued = true;
+});
+window.addEventListener("pointerup", (e) => {
+  if (e.pointerId === canvasPointer) {
+    pointerJump = false;
+    canvasPointer = null;
+  }
+});
+window.addEventListener("pointercancel", () => {
+  pointerJump = false;
+  canvasPointer = null;
 });
 
 window.addEventListener("keydown", (e) => {
@@ -161,6 +210,7 @@ window.addEventListener("keydown", (e) => {
   if (e.code === "ArrowRight" || e.code === "KeyD") keys.sprint = true;
   if (e.code === "ArrowLeft" || e.code === "KeyA") keys.brake = true;
   if (e.code === "ArrowDown" || e.code === "KeyS") keys.drop = true;
+  if ((e.code === "KeyF" || e.code === "KeyH") && !e.repeat) helpQueued = true;
   if (e.code === "KeyP" || e.code === "Escape") togglePause();
   if (e.code === "KeyM") {
     audio.resume();
@@ -185,13 +235,15 @@ window.addEventListener("keyup", (e) => {
 
 function playerInput() {
   const input = {
-    jumpHeld: keys.jump || pointerJump || touchJump,
+    jumpHeld: keys.jump || pointerJump || held.jump,
     jumpPressed: jumpQueued,
-    sprint: keys.sprint || touchSprint,
-    brake: keys.brake,
-    drop: keys.drop,
+    sprint: keys.sprint || held.sprint,
+    brake: keys.brake || held.brake,
+    drop: keys.drop || held.drop,
+    help: helpQueued,
   };
   jumpQueued = false;
+  helpQueued = false;
   return input;
 }
 
@@ -215,7 +267,7 @@ function frame(now) {
   saveBest();
   audio.sync(game, dt);
   audio.playList(pullSfx(game));
-  draw(ctx, game, { reduceMotion });
+  draw(ctx, game, { reduceMotion, touch: touchUI });
   syncUI();
   requestAnimationFrame(frame);
 }

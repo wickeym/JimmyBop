@@ -1,0 +1,9 @@
+{
+  "name": "Jimmy Bop",
+  "short_name": "Jimmy Bop",
+  "start_url": "./",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#1a1030",
+  "theme_color": "#1a1030"
+}
