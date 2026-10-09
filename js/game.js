@@ -133,22 +133,30 @@ function pushSegment(g, spec) {
       });
     }
   }
-  if (spec.coins) {
-    const n = spec.coins;
-    for (let i = 0; i < n; i++) {
-      seg.coins.push({
-        x: seg.x + 28 + i * 26,
-        y: GROUND_Y - 34,
-        got: false,
-      });
+  if (spec.coins && spec.kind === "ground") {
+    const lift = spec.coinLift || 42;
+    let x0 = seg.x + 40;
+    let x1 = seg.x + seg.w - 52;
+    if (seg.obs.length) {
+      const first = seg.obs[0].x - 18;
+      const lastObs = seg.obs[seg.obs.length - 1];
+      const last = lastObs.x + lastObs.w + 18;
+      if (first - x0 > 100) x1 = first;
+      else if (seg.x + seg.w - 52 - last > 100) x0 = last;
+      else x1 = x0;
+      for (const o of seg.obs) {
+        const y = GROUND_Y - o.h - 34;
+        if (y > GROUND_Y - 112) seg.coins.push({ x: o.x + o.w / 2, y, got: false });
+      }
     }
+    addCoinArc(seg, x0, x1, 58, lift);
   }
   if (spec.kind === "gap" && spec.arc) {
     for (let i = 0; i < 3; i++) {
       const t = (i + 1) / 4;
       seg.coins.push({
         x: seg.x + seg.w * t,
-        y: GROUND_Y - 62 - Math.sin(t * Math.PI) * 18,
+        y: GROUND_Y - 72 - Math.sin(t * Math.PI) * 28,
         got: false,
       });
     }
@@ -189,6 +197,19 @@ function randomObs(rng, pressure) {
   const extra = Math.min(18, Math.floor(pressure * 8));
   const tall = 32 + Math.floor(rng() * (10 + extra));
   return { k: "pillar", w: 18, h: tall };
+}
+
+function addCoinArc(seg, x0, x1, base, lift) {
+  if (x1 - x0 < 80) return;
+  const count = Math.max(3, Math.min(6, Math.round((x1 - x0) / 34)));
+  for (let i = 0; i < count; i++) {
+    const t = i / (count - 1);
+    seg.coins.push({
+      x: Math.round(x0 + (x1 - x0) * t),
+      y: Math.round(GROUND_Y - base - Math.sin(t * Math.PI) * lift),
+      got: false,
+    });
+  }
 }
 
 function considerMarker(g, seg) {
@@ -260,7 +281,10 @@ function addProcedural(g) {
     }
   }
   if (!spec.obs.length) delete spec.obs;
-  if (g.rng() < 0.62) spec.coins = 2 + Math.floor(g.rng() * 3);
+  if (g.rng() < 0.88) {
+    spec.coins = 1;
+    spec.coinLift = 40 + Math.min(d, 1.4) * 10;
+  }
   pushSegment(g, spec);
 }
 
