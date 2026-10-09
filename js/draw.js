@@ -7,29 +7,45 @@ import {
   expression,
 } from "./game.js";
 
-const SKIES = [
-  ["#2a2158", "#6d7ec4", "#f08a62", "#ffcf8a"],
-  ["#3a2458", "#c46a62", "#f0783c", "#ffb15a"],
-  ["#2a1a28", "#8a4548", "#e15a30", "#e39a60"],
-  ["#1c1020", "#6a2840", "#ff4a18", "#ffc46a"],
-  ["#140c18", "#4a182c", "#ff3010", "#ffd36a"],
-  ["#100810", "#3a1020", "#e01810", "#ffe08a"],
+const SCENES = [
+  { sky: ["#241848", "#6d7ec4", "#f08a62", "#ffd0a0"], mountain: ["#9b8cbe", "#64548a", "#3c3158"], snow: "#f7fbff", crust: "#d7e6f4", dirt: "#3a2d4a", brick: "#2a2138", volcano: "#2c2344", trees: "pine", bits: "stars", light: "moon", snowCaps: true, relief: 1 },
+  { sky: ["#4a1840", "#d06050", "#ff8a3c", "#ffd27a"], mountain: ["#a06058", "#6a3834", "#3a201c"], snow: "#f0d2c4", crust: "#e7b8a4", dirt: "#4a241c", brick: "#321810", volcano: "#4a2018", trees: "pine", bits: "stars", light: "sun", snowCaps: true, relief: 1.05 },
+  { sky: ["#3a342c", "#8a7464", "#c8aa90", "#ead6c4"], mountain: ["#7a7068", "#524c46", "#2e2a26"], snow: "#c8beb4", crust: "#b0a498", dirt: "#3a342e", brick: "#2a2622", volcano: "#3a3028", trees: "dead", bits: "dust", light: "sun", snowCaps: false, relief: 0.62 },
+  { sky: ["#2a0814", "#9a2018", "#ff4a1c", "#ffb050"], mountain: ["#6a2430", "#3a1218", "#1c0a10"], snow: "#c47a62", crust: "#a45a48", dirt: "#3a1410", brick: "#240c0a", volcano: "#4a140c", trees: "none", bits: "embers", light: "none", snowCaps: false, relief: 1.2 },
+  { sky: ["#140810", "#6a1428", "#e02810", "#ff7a30"], mountain: ["#4a1824", "#2a0e16", "#14080c"], snow: "#8a4030", crust: "#6a2818", dirt: "#2a100c", brick: "#1a0a08", volcano: "#5a180c", trees: "none", bits: "embers", light: "sun", snowCaps: false, relief: 0.78 },
+  { sky: ["#0c0608", "#3a1014", "#c03810", "#ffc060"], mountain: ["#2a1214", "#1a0c0e", "#0c0608"], snow: "#5a3028", crust: "#3a1c16", dirt: "#1c0c0a", brick: "#100806", volcano: "#6a1c08", trees: "none", bits: "embers", light: "none", snowCaps: false, relief: 0.9 },
+  { sky: ["#3a0c08", "#ff3a10", "#ff9a30", "#ffe090"], mountain: ["#5a1c14", "#2a0c0a", "#140604"], snow: "#e07040", crust: "#c04820", dirt: "#4a140c", brick: "#2a0c08", volcano: "#ff5a1f", trees: "none", bits: "embers", light: "sun", snowCaps: false, relief: 1.35 },
+  { sky: ["#070814", "#16182e", "#4a2858", "#d06048"], mountain: ["#2a2c44", "#141624", "#0a0c14"], snow: "#3a3c55", crust: "#2a2c40", dirt: "#12121c", brick: "#0c0c14", volcano: "#1a1028", trees: "none", bits: "stars", light: "moon", snowCaps: false, relief: 1.15 },
 ];
 
-function worldShift(g) {
-  const index = Math.max(0, (g.levelNumber || 1) - 1);
-  const frac = ((g.meters || 0) % LEVEL_METERS) / LEVEL_METERS;
-  const t = index === 0 ? 0 : Math.max(0, Math.min(1, frac / 0.2));
-  const ash = Math.max(0, Math.min(1, (Math.max(0, index - 1) + t) / 4.5));
-  return { index, t, ash };
+function sceneAt(index) {
+  if (index < SCENES.length) return SCENES[index];
+  return SCENES[4 + ((index - 4) % 4)];
 }
 
-function skyStop(index, t, stop) {
-  const last = SKIES.length - 1;
-  const cur = SKIES[Math.min(index, last)];
-  if (index <= 0) return cur[stop];
-  const prev = SKIES[Math.min(index - 1, last)];
-  return mix(prev[stop], cur[stop], t);
+function worldLook(g) {
+  const index = Math.max(0, (g.levelNumber || 1) - 1);
+  const frac = ((g.meters || 0) % LEVEL_METERS) / LEVEL_METERS;
+  const next = sceneAt(index);
+  if (index === 0) return { ...next, index };
+  const prev = sceneAt(index - 1);
+  const t = Math.min(1, 0.62 + frac / 0.08);
+  const pick = (key) => (t > 0.5 ? next[key] : prev[key]);
+  return {
+    index,
+    sky: next.sky.map((c, i) => mix(prev.sky[i], c, t)),
+    mountain: next.mountain.map((c, i) => mix(prev.mountain[i], c, t)),
+    snow: mix(prev.snow, next.snow, t),
+    crust: mix(prev.crust, next.crust, t),
+    dirt: mix(prev.dirt, next.dirt, t),
+    brick: mix(prev.brick, next.brick, t),
+    volcano: mix(prev.volcano, next.volcano, t),
+    relief: prev.relief + (next.relief - prev.relief) * t,
+    trees: pick("trees"),
+    bits: pick("bits"),
+    light: pick("light"),
+    snowCaps: pick("snowCaps"),
+  };
 }
 
 function mix(a, b, t) {
@@ -58,47 +74,69 @@ function ellipse(ctx, x, y, rx, ry) {
 }
 
 function drawSky(ctx, g) {
-  const shift = worldShift(g);
+  const look = worldLook(g);
   const grd = ctx.createLinearGradient(0, 0, 0, VIEW_H);
-  grd.addColorStop(0, skyStop(shift.index, shift.t, 0));
-  grd.addColorStop(0.32, skyStop(shift.index, shift.t, 1));
-  grd.addColorStop(0.58, skyStop(shift.index, shift.t, 2));
-  grd.addColorStop(0.82, skyStop(shift.index, shift.t, 3));
-  grd.addColorStop(1, mix(skyStop(shift.index, shift.t, 3), "#ffe7c4", 0.35));
+  grd.addColorStop(0, look.sky[0]);
+  grd.addColorStop(0.32, look.sky[1]);
+  grd.addColorStop(0.58, look.sky[2]);
+  grd.addColorStop(0.82, look.sky[3]);
+  grd.addColorStop(1, mix(look.sky[3], "#fff1d4", look.bits === "embers" ? 0.08 : 0.28));
   ctx.fillStyle = grd;
   ctx.fillRect(0, 0, VIEW_W, VIEW_H);
 
   const cam = g.camX;
-  for (let i = 0; i < 32; i++) {
-    const span = VIEW_W + 40;
-    const x = ((hash(i * 19) * span - cam * 0.015) % span + span) % span - 16;
-    const y = 6 + hash(i * 7) * 78;
-    const tw = 0.25 + Math.abs(Math.sin(g.time * 1.4 + i * 1.7)) * 0.75;
-    ctx.globalAlpha = tw * (0.85 - shift.ash * 0.35);
-    ctx.fillStyle = hash(i * 3) > 0.82 ? "#fff4c8" : "#ffffff";
-    const s = hash(i * 11) > 0.8 ? 2 : 1;
-    ctx.fillRect(x, y, s, s);
+  if (look.bits === "stars") {
+    for (let i = 0; i < 32; i++) {
+      const span = VIEW_W + 40;
+      const x = ((hash(i * 19) * span - cam * 0.015) % span + span) % span - 16;
+      const y = 6 + hash(i * 7) * 78;
+      const tw = 0.25 + Math.abs(Math.sin(g.time * 1.4 + i * 1.7)) * 0.75;
+      ctx.globalAlpha = tw * 0.85;
+      ctx.fillStyle = hash(i * 3) > 0.82 ? "#fff4c8" : "#ffffff";
+      const s = hash(i * 11) > 0.8 ? 2 : 1;
+      ctx.fillRect(x, y, s, s);
+    }
+  } else if (look.bits === "embers") {
+    for (let i = 0; i < 18; i++) {
+      const span = VIEW_W + 30;
+      const rise = (g.time * (18 + (i % 5) * 8) + hash(i) * span) % (VIEW_H * 0.7);
+      const x = ((hash(i * 13) * span - cam * 0.04) % span + span) % span;
+      ctx.globalAlpha = 0.35 + (i % 3) * 0.2;
+      ctx.fillStyle = i % 2 ? "#ffb15a" : "#ff5a1f";
+      ctx.fillRect(x, VIEW_H * 0.62 - rise, 2, 2);
+    }
+  } else {
+    for (let i = 0; i < 16; i++) {
+      const span = VIEW_W + 40;
+      const x = ((i * 40 - cam * 0.05 + g.time * 8) % span + span) % span - 10;
+      ctx.globalAlpha = 0.25;
+      ctx.fillStyle = "#d9d0c6";
+      ellipse(ctx, x, 30 + (i % 5) * 14, 1.4, 1.4);
+    }
   }
   ctx.globalAlpha = 1;
 
-  const mx = VIEW_W - 132;
-  const my = 48;
-  ctx.fillStyle = mix("#fff6e4", "#ff9a3c", shift.ash);
-  ctx.globalAlpha = 0.28;
-  ellipse(ctx, mx, my, 22, 22);
-  ctx.globalAlpha = 1;
-  ellipse(ctx, mx, my, 11, 11);
-  if (shift.ash < 0.45) {
-    ctx.fillStyle = skyStop(shift.index, shift.t, 0);
-    ellipse(ctx, mx - 4, my - 2, 9, 9);
+  if (look.light !== "none") {
+    const mx = VIEW_W - 132;
+    const my = 48;
+    ctx.fillStyle = look.light === "sun" ? "#ffd27a" : "#fff6e4";
+    ctx.globalAlpha = 0.28;
+    ellipse(ctx, mx, my, 22, 22);
+    ctx.globalAlpha = 1;
+    ellipse(ctx, mx, my, 11, 11);
+    if (look.light === "moon") {
+      ctx.fillStyle = look.sky[0];
+      ellipse(ctx, mx - 4, my - 2, 9, 9);
+    }
   }
 
+  const cloud = look.bits === "embers" ? "rgba(80, 30, 24, 0.35)" : "rgba(255, 236, 220, 0.4)";
   const bands = [
-    { parallax: 0.05, alpha: 0.28, y: 46, scale: 1.15 },
-    { parallax: 0.14, alpha: 0.5, y: 62, scale: 1 },
+    { parallax: 0.05, y: 46, scale: 1.15 },
+    { parallax: 0.14, y: 62, scale: 1 },
   ];
+  ctx.fillStyle = cloud;
   for (const band of bands) {
-    ctx.fillStyle = `rgba(255, 236, 220, ${band.alpha})`;
     for (let i = 0; i < 5; i++) {
       const span = VIEW_W + 180;
       const x = ((i * 150 - cam * band.parallax) % span + span) % span - 50;
@@ -106,19 +144,17 @@ function drawSky(ctx, g) {
       const w = 26 * band.scale;
       ellipse(ctx, x, y, w, 8 * band.scale);
       ellipse(ctx, x + 16 * band.scale, y + 2, w * 0.7, 6 * band.scale);
-      ctx.fillStyle = `rgba(255, 250, 244, ${band.alpha * 0.7})`;
-      ellipse(ctx, x - 4, y - 2, w * 0.45, 3.2 * band.scale);
-      ctx.fillStyle = `rgba(255, 236, 220, ${band.alpha})`;
     }
   }
 }
 
 function drawMountains(ctx, g) {
-  const ash = worldShift(g).ash;
+  const look = worldLook(g);
+  const relief = look.relief || 1;
   const ranges = [
-    { y: 104, color: mix("#8d7eae", "#6a4458", ash), parallax: 0.08, h: 28, step: 58, snow: 0.35 },
-    { y: 122, color: mix("#5c4a78", "#4a2438", ash), parallax: 0.16, h: 42, step: 46, snow: 0.7 },
-    { y: 146, color: mix("#3e335c", "#2a1424", ash), parallax: 0.3, h: 34, step: 34, snow: 1 },
+    { y: 104, color: look.mountain[0], parallax: 0.08, h: 28 * relief, step: 58 / relief, snow: 0.35 },
+    { y: 122, color: look.mountain[1], parallax: 0.16, h: 42 * relief, step: 46 / relief, snow: 0.7 },
+    { y: 146, color: look.mountain[2], parallax: 0.3, h: 34 * relief, step: 34 / relief, snow: 1 },
   ];
   for (const range of ranges) {
     const off = (g.camX * range.parallax) % range.step;
@@ -135,9 +171,9 @@ function drawMountains(ctx, g) {
     }
     ctx.lineTo(VIEW_W + 20, VIEW_H);
     ctx.fill();
-    if (ash < 0.85) {
-      ctx.fillStyle = mix("#f7fbff", "#c9a090", ash);
-      ctx.globalAlpha = (1 - ash) * range.snow;
+    if (look.snowCaps) {
+      ctx.fillStyle = look.snow;
+      ctx.globalAlpha = range.snow;
       for (const peak of peaks) {
         ctx.beginPath();
         ctx.moveTo(peak.x - 7, peak.y + 8);
@@ -149,67 +185,79 @@ function drawMountains(ctx, g) {
     }
   }
 
-  const treeOff = (g.camX * 0.38) % 28;
-  ctx.fillStyle = mix("#243044", "#3a1820", ash);
-  for (let x = -treeOff; x < VIEW_W + 28; x += 28) {
-    const h = 10 + hash(Math.floor((x + g.camX * 0.38) / 28)) * 12;
-    const y = 168;
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-    ctx.lineTo(x + 5, y - h);
-    ctx.lineTo(x + 10, y);
-    ctx.fill();
+  if (look.trees !== "none") {
+    const treeOff = (g.camX * 0.38) % 28;
+    ctx.fillStyle = look.trees === "dead" ? look.mountain[2] : mix("#243044", look.mountain[2], 0.35);
+    for (let x = -treeOff; x < VIEW_W + 28; x += 28) {
+      const h = 10 + hash(Math.floor((x + g.camX * 0.38) / 28)) * 12;
+      const y = 168;
+      ctx.beginPath();
+      if (look.trees === "dead") {
+        ctx.moveTo(x + 4, y);
+        ctx.lineTo(x + 5, y - h);
+        ctx.lineTo(x + 6, y);
+      } else {
+        ctx.moveTo(x, y);
+        ctx.lineTo(x + 5, y - h);
+        ctx.lineTo(x + 10, y);
+      }
+      ctx.fill();
+    }
   }
 
+  const spread = 70 + Math.min(look.index, 6) * 8;
   const vx = VIEW_W * 0.72 - (g.camX * 0.08) % (VIEW_W + 200);
-  ctx.fillStyle = "#2c2344";
+  ctx.fillStyle = look.volcano;
   ctx.beginPath();
-  ctx.moveTo(vx - 70, 168);
-  ctx.lineTo(vx, 58);
-  ctx.lineTo(vx + 78, 168);
+  ctx.moveTo(vx - spread, 168);
+  ctx.lineTo(vx, 58 - Math.min(look.index, 5) * 3);
+  ctx.lineTo(vx + spread + 8, 168);
   ctx.fill();
+  const peakY = 58 - Math.min(look.index, 5) * 3;
   ctx.fillStyle = "#ff5a1f";
   ctx.beginPath();
-  ctx.moveTo(vx - 10, 78);
-  ctx.lineTo(vx, 58);
-  ctx.lineTo(vx + 12, 80);
+  ctx.moveTo(vx - 10, peakY + 20);
+  ctx.lineTo(vx, peakY);
+  ctx.lineTo(vx + 12, peakY + 22);
   ctx.fill();
-  ctx.strokeStyle = mix("#2a2038", "#4a2018", worldShift(g).ash);
-  ctx.lineWidth = 1.4;
-  for (let i = 0; i < 3; i++) {
-    const span = VIEW_W + 60;
-    const bx = ((i * 190 + g.time * 16 - g.camX * 0.22) % span + span) % span - 20;
-    const by = 88 + i * 16 + Math.sin(g.time * 1.6 + i) * 4;
-    const flap = Math.sin(g.time * 9 + i * 2) * 3;
-    ctx.beginPath();
-    ctx.moveTo(bx - 5, by + flap);
-    ctx.lineTo(bx, by);
-    ctx.lineTo(bx + 5, by + flap);
-    ctx.stroke();
+  if (look.index < 3) {
+    ctx.strokeStyle = look.mountain[2];
+    ctx.lineWidth = 1.4;
+    for (let i = 0; i < 3; i++) {
+      const span = VIEW_W + 60;
+      const bx = ((i * 190 + g.time * 16 - g.camX * 0.22) % span + span) % span - 20;
+      const by = 88 + i * 16 + Math.sin(g.time * 1.6 + i) * 4;
+      const flap = Math.sin(g.time * 9 + i * 2) * 3;
+      ctx.beginPath();
+      ctx.moveTo(bx - 5, by + flap);
+      ctx.lineTo(bx, by);
+      ctx.lineTo(bx + 5, by + flap);
+      ctx.stroke();
+    }
   }
 
   ctx.fillStyle = "#ffd56a";
-  const pulse = 6 + worldShift(g).ash * 10 + Math.sin(g.time * 5) * 3;
+  const pulse = 6 + Math.min(look.index, 6) * 2 + Math.sin(g.time * 5) * 3;
   ctx.beginPath();
-  ctx.moveTo(vx - 4, 74);
-  ctx.lineTo(vx, 62);
-  ctx.lineTo(vx + 5, 74 + pulse * 0.2);
+  ctx.moveTo(vx - 4, peakY + 16);
+  ctx.lineTo(vx, peakY + 4);
+  ctx.lineTo(vx + 5, peakY + 16 + pulse * 0.2);
   ctx.fill();
 }
 
 function drawGround(ctx, seg, g) {
   const y = seg.y;
-  const ash = g ? worldShift(g).ash : 0;
-  ctx.fillStyle = mix("#3a2d4a", "#4a1a14", ash);
+  const look = g ? worldLook(g) : null;
+  ctx.fillStyle = look ? look.dirt : "#3a2d4a";
   ctx.fillRect(seg.x, y + 8, seg.w, VIEW_H - y);
-  ctx.fillStyle = "#2a2138";
+  ctx.fillStyle = look ? look.brick : "#2a2138";
   for (let x = seg.x; x < seg.x + seg.w; x += 16) {
     ctx.fillRect(x, y + 18, 14, 5);
     ctx.fillRect(x + 8, y + 28, 14, 5);
   }
-  ctx.fillStyle = mix("#d7e6f4", "#b39284", ash);
-  ctx.fillRect(seg.x, y + 4, seg.w, 8 - ash * 2);
-  ctx.fillStyle = mix("#f7fbff", "#c8a090", ash);
+  ctx.fillStyle = look ? look.crust : "#d7e6f4";
+  ctx.fillRect(seg.x, y + 4, seg.w, 8);
+  ctx.fillStyle = look ? look.snow : "#f7fbff";
   ctx.beginPath();
   ctx.moveTo(seg.x, y + 6);
   for (let x = seg.x; x <= seg.x + seg.w; x += 8) {
@@ -218,9 +266,11 @@ function drawGround(ctx, seg, g) {
   ctx.lineTo(seg.x + seg.w, y + 10);
   ctx.lineTo(seg.x, y + 10);
   ctx.fill();
-  ctx.fillStyle = "rgba(255,255,255,0.8)";
-  for (let x = seg.x + 6; x < seg.x + seg.w; x += 22) {
-    if (hash(x) > 0.55) ellipse(ctx, x, y + 1, 4 + hash(x + 3) * 4, 2.2);
+  if (!look || look.snowCaps) {
+    ctx.fillStyle = "rgba(255,255,255,0.8)";
+    for (let x = seg.x + 6; x < seg.x + seg.w; x += 22) {
+      if (hash(x) > 0.55) ellipse(ctx, x, y + 1, 4 + hash(x + 3) * 4, 2.2);
+    }
   }
 }
 

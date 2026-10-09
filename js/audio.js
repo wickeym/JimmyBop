@@ -67,6 +67,32 @@ export function createAudio() {
     src.start();
   }
 
+  function sizzle() {
+    if (!ctx || muted) return;
+    const dur = 0.9;
+    const n = Math.floor(ctx.sampleRate * dur);
+    const buf = ctx.createBuffer(1, n, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < n; i++) {
+      const env = (1 - i / n) ** 0.4;
+      const pop = Math.random() < 0.03 ? (Math.random() * 2 - 1) * 2.6 : 0;
+      data[i] = ((Math.random() * 2 - 1) * 0.4 + pop) * env;
+    }
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const filter = ctx.createBiquadFilter();
+    filter.type = "highpass";
+    filter.frequency.setValueAtTime(2400, ctx.currentTime);
+    filter.frequency.exponentialRampToValueAtTime(700, ctx.currentTime + dur);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.32, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + dur);
+    src.connect(filter);
+    filter.connect(g);
+    g.connect(master);
+    src.start();
+  }
+
   function play(name) {
     const now = ctx ? ctx.currentTime : 0;
     if (last[name] && now - last[name] < 0.07) return;
@@ -88,7 +114,7 @@ export function createAudio() {
       tone(660, 0.1, "square", 0.06, 990);
       tone(990, 0.14, "triangle", 0.05);
     }
-    else if (name === "melt") tone(392, 0.45, "sawtooth", 0.06, 70);
+    else if (name === "melt") sizzle();
     else if (name === "phin") {
       tone(392, 0.08, "triangle", 0.07);
       tone(523, 0.1, "triangle", 0.06);
