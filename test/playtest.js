@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { qualifies } from "../js/board.js";
 import { createBot } from "../js/bot.js";
 import {
   AIR_TIME,
@@ -65,6 +66,11 @@ const sprintReach = jumpReach(cruiseOf(0) * 1.25);
 assert(introPit.w > sprintReach, `tutorial pit should be unskippable (${introPit.w} vs reach ${sprintReach.toFixed(1)})`);
 assert(introGap.w < jumpReach(cruiseOf(0)) * 0.8, "tutorial gap is too wide");
 assert(html.includes("F calls Phin"), "title should tell you how to call Phin");
+assert(html.includes("id=\"initials\""), "game over should ask for a name");
+assert(qualifies([], 10), "an empty board should take the first score");
+assert(qualifies([{ score: 5 }], 1), "a short board should stay open");
+assert(!qualifies(Array.from({ length: 10 }, (_, i) => ({ score: 100 - i })), 10), "a full board should reject a low score");
+assert(qualifies(Array.from({ length: 10 }, (_, i) => ({ score: 100 - i })), 92), "a better score should make the board");
 
 const rescue = startRun(0, 1);
 assert(rescue.helps === 1, "Jimmy should start with one ride from Phin");

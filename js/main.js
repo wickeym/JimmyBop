@@ -1,6 +1,7 @@
 import { createBot } from "./bot.js";
 import { createAudio } from "./audio.js";
 import { draw } from "./draw.js";
+import { fetchBoard, qualifies, submitScore } from "./board.js";
 import { STEP, VIEW_H, VIEW_W, createGame, lookAhead, pullSfx, startRun, update } from "./game.js";
 
 const canvas = document.getElementById("game");
@@ -19,6 +20,12 @@ const bestEl = document.getElementById("best");
 const overScore = document.getElementById("overScore");
 const overLine = document.getElementById("overLine");
 const overBest = document.getElementById("overBest");
+const nameForm = document.getElementById("nameForm");
+const initials = document.getElementById("initials");
+const nameError = document.getElementById("nameError");
+const boardEl = document.getElementById("board");
+const titleBoard = document.getElementById("titleBoard");
+const boardStatus = document.getElementById("boardStatus");
 
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const touchUI = window.matchMedia("(pointer: coarse), (hover: none)").matches;
@@ -112,14 +119,85 @@ function syncUI() {
   if (game.state === "over" && !shownOver) {
     shownOver = true;
     saveBest();
+    openBoard();
   }
   if (game.state === "over") {
-    overScore.textContent = `Level ${game.levelNumber} · ${game.levelName}  ·  ${game.meters} m  ·  ${game.coins} coins`;
+    overScore.textContent = `Level ${game.levelNumber} · ${game.levelName}  ·  ${game.meters} m  ·  ${game.score} pts`;
     overLine.textContent = game.line || "Jimmy melted.";
     overBest.textContent = `Best: Level ${Math.max(bestLevel, game.levelNumber)} · ${Math.max(bestMeters, game.meters)} m`;
   }
   syncMute();
 }
+
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+}
+
+function paintBoard(list, highlightId) {
+  const rows = (list || []).slice(0, 10);
+  const html = rows.map((row, i) => {
+    const mine = row.id === highlightId ? " class=\"mine\"" : "";
+    return `<li${mine}><span>${i + 1}</span><span>${escapeHtml(row.name)}</span><span>${row.score}<span class="meters"> ${row.meters}m</span></span></li>`;
+  }).join("");
+  boardEl.innerHTML = html;
+  boardEl.hidden = rows.length === 0;
+  titleBoard.innerHTML = html;
+  titleBoard.hidden = rows.length === 0;
+}
+
+async function refreshTitleBoard() {
+  try {
+    paintBoard(await fetchBoard());
+  } catch {
+    titleBoard.hidden = true;
+  }
+}
+
+async function openBoard() {
+  nameForm.hidden = true;
+  nameError.hidden = true;
+  initials.value = localStorage.getItem("jimmy-bop-name") || "";
+  boardStatus.hidden = false;
+  boardStatus.textContent = "Checking the board…";
+  let scores = [];
+  try {
+    scores = await fetchBoard();
+    paintBoard(scores);
+    boardStatus.hidden = true;
+  } catch {
+    boardStatus.textContent = "The board is out. Your run is still saved on this phone.";
+    return;
+  }
+  if (qualifies(scores, game.score)) {
+    nameForm.hidden = false;
+    initials.focus();
+  }
+}
+
+nameForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  nameError.hidden = true;
+  const name = initials.value;
+  try {
+    const result = await submitScore({
+      name,
+      score: game.score,
+      meters: game.meters,
+      level: game.levelNumber,
+      levelName: game.levelName,
+      coins: game.coins,
+    });
+    localStorage.setItem("jimmy-bop-name", name.toUpperCase().replace(/[^A-Z0-9 ]/g, "").trim().slice(0, 10));
+    nameForm.hidden = true;
+    paintBoard(result.scores, result.saved ? result.scores[result.rank - 1]?.id : "");
+    boardStatus.hidden = false;
+    boardStatus.textContent = result.saved ? `You're number ${result.rank}.` : "Not quite the top ten. Run it back.";
+  } catch (err) {
+    nameError.hidden = false;
+    nameError.textContent = err.message || "Couldn't save that.";
+  }
+});
 
 playBtn.addEventListener("click", (e) => {
   e.stopPropagation();
@@ -182,6 +260,7 @@ canvas.addEventListener("pointerdown", (e) => {
     return;
   }
   if (game.state === "over") {
+    if (!nameForm.hidden) return;
     beginRun();
     return;
   }
@@ -202,6 +281,7 @@ window.addEventListener("pointercancel", () => {
 });
 
 window.addEventListener("keydown", (e) => {
+  if (document.activeElement === initials) return;
   if (["Space", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.code)) e.preventDefault();
   if (e.code === "Space" || e.code === "ArrowUp" || e.code === "KeyW") {
     if (!keys.jump) jumpQueued = true;
@@ -218,6 +298,7 @@ window.addEventListener("keydown", (e) => {
     localStorage.setItem("jimmy-bop-mute", muted ? "1" : "0");
   }
   if (e.code === "Enter") {
+    if (!nameForm.hidden) return;
     if (game.mode === "demo" || game.state === "over") beginRun();
     else if (game.state === "pause") game.state = "play";
   }
@@ -292,4 +373,5 @@ window.__jimmy = {
 };
 
 syncUI();
+refreshTitleBoard();
 requestAnimationFrame(frame);

@@ -1,0 +1,17 @@
+{
+  "name": "jimmy-bop-board",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-09",
+  "observability": {
+    "enabled": true,
+    "traces": {
+      "enabled": true
+    }
+  },
+  "kv_namespaces": [
+    {
+      "binding": "SCORES",
+      "id": "5cc9eaa1389244118c110c9d53db210c"
+    }
+  ]
+}

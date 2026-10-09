@@ -45,6 +45,7 @@
             <button id="play" type="button">Play</button>
           </div>
           <p id="best" hidden></p>
+          <ol id="titleBoard" class="board" hidden></ol>
           <p class="credits">
             <span>Created by <strong>Silas</strong></span>
             <span>Jimmy Bop is Phin’s best friend</span>
@@ -71,6 +72,16 @@
           <p id="overLine" class="sub">Jimmy turned into a puddle.</p>
           <p id="overScore" class="sub"></p>
           <p id="overBest" class="sub"></p>
+          <form id="nameForm" hidden>
+            <p class="sub">Put your name on the board</p>
+            <input id="initials" name="initials" maxlength="10" autocomplete="off" autocapitalize="characters" enterkeyhint="done" placeholder="NAME" aria-label="Name" />
+            <div class="row">
+              <button id="saveScore" type="submit">Save</button>
+            </div>
+            <p id="nameError" class="sub" hidden></p>
+          </form>
+          <p id="boardStatus" class="sub" hidden></p>
+          <ol id="board" class="board" hidden></ol>
           <p class="sub">Phin can restuff him. Probably.</p>
           <div class="row">
             <button id="retry" type="button">Try again</button>

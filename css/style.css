@@ -237,6 +237,49 @@ kbd {
   font-size: 13px;
 }
 
+.board {
+  list-style: none;
+  margin: 6px 0;
+  padding: 0;
+  text-align: left;
+  font-family: "Trebuchet MS", sans-serif;
+  font-size: 13px;
+  max-height: 132px;
+  overflow: auto;
+}
+
+.board li {
+  display: grid;
+  grid-template-columns: 1.6em 1fr auto;
+  gap: 6px;
+  padding: 2px 4px;
+  border-radius: 6px;
+}
+
+.board li.mine {
+  background: #ffe08a;
+}
+
+.board .meters {
+  color: #5c6b86;
+  font-size: 11px;
+}
+
+#initials {
+  display: block;
+  width: min(220px, 80%);
+  margin: 0 auto 8px;
+  padding: 8px;
+  border: 3px solid #172033;
+  border-radius: 10px;
+  font: 800 22px "Arial Black", Impact, sans-serif;
+  letter-spacing: 2px;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+#nameError { color: #e23b2f; }
+
 #pause, #over {
   justify-content: center;
   align-items: center;
