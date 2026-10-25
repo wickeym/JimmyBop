@@ -349,6 +349,30 @@ kbd {
   display: none;
 }
 
+@media (max-height: 520px), (pointer: coarse) {
+  #over {
+    align-items: flex-start;
+    justify-content: flex-start;
+    overflow: auto;
+    touch-action: pan-y;
+    padding: 8px 10px 16px;
+  }
+  #over .card {
+    width: min(440px, 100%);
+    padding: 8px 10px;
+  }
+  #over h2 { font-size: 26px; margin-bottom: 4px; }
+  #over .sub { font-size: 13px; margin-bottom: 4px; }
+  #over .extra, #over .joke, #over .credits { display: none; }
+  #over .board { max-height: 78px; font-size: 12px; }
+  #initials {
+    font-size: 16px;
+    padding: 10px;
+    margin-bottom: 6px;
+  }
+  #saveScore, #retry { min-height: 44px; }
+}
+
 @media (max-width: 720px) {
   .tips { grid-template-columns: 1fr 1fr; }
   .logo { font-size: 48px; }

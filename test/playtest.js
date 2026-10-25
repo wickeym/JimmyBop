@@ -67,6 +67,33 @@ assert(introPit.w > sprintReach, `tutorial pit should be unskippable (${introPit
 assert(introGap.w < jumpReach(cruiseOf(0)) * 0.8, "tutorial gap is too wide");
 assert(html.includes("F calls Phin"), "title should tell you how to call Phin");
 assert(html.includes("id=\"initials\""), "game over should ask for a name");
+
+const stomp = startRun(0, 1);
+const stompSeg = stomp.segments.find((s) => s.kind === "ground" && s.x <= 430 && s.x + s.w >= 460);
+stompSeg.slugs = [{ x: 420, vx: 0, w: 26, h: 11, alive: true, t: 0, gone: 0 }];
+stomp.player.x = 430;
+stomp.player.vx = 0;
+stomp.player.y = GROUND_Y - 50;
+stomp.player.vy = 280;
+stomp.player.onGround = false;
+stomp.player.mercy = 0;
+stomp.lavaX = -400;
+const coinsBefore = stomp.coins;
+run(stomp, 0.35, () => none());
+assert(!stompSeg.slugs[0]?.alive, "landing on a slug should squash it");
+assert(stomp.coins === coinsBefore + 1, `squashing a slug should give a coin (${stomp.coins})`);
+assert(stomp.state === "play", "a stomp should not melt Jimmy");
+
+const slimed = startRun(0, 1);
+const slimeSeg = slimed.segments.find((s) => s.kind === "ground");
+slimeSeg.slugs = [{ x: slimed.player.x - 4, vx: 0, w: 26, h: 11, alive: true, t: 0, gone: 0 }];
+slimed.player.y = GROUND_Y;
+slimed.player.vy = 0;
+slimed.player.onGround = true;
+slimed.player.mercy = 0;
+slimed.lavaX = -400;
+run(slimed, 0.2, () => none());
+assert(slimed.deathLog.some((d) => d.reason === "slug"), "walking into a slug should catch Jimmy");
 assert(qualifies([], 10), "an empty board should take the first score");
 assert(qualifies([{ score: 5 }], 1), "a short board should stay open");
 assert(!qualifies(Array.from({ length: 10 }, (_, i) => ({ score: 100 - i })), 10), "a full board should reject a low score");

@@ -171,6 +171,7 @@ async function openBoard() {
   if (qualifies(scores, game.score)) {
     nameForm.hidden = false;
     initials.focus();
+    setTimeout(() => initials.scrollIntoView({ block: "center" }), 50);
   }
 }
 

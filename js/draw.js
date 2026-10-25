@@ -368,6 +368,35 @@ function drawSign(ctx, seg) {
   ctx.fillText("ICE", x + 14, y - 25);
 }
 
+function drawSlug(ctx, slug) {
+  const y = GROUND_Y;
+  const flat = slug.alive ? 1 : Math.max(0.2, 1 - slug.gone * 3);
+  ctx.save();
+  ctx.translate(slug.x + slug.w / 2, y);
+  ctx.globalAlpha = slug.alive ? 1 : Math.max(0, 1 - slug.gone * 2);
+  ctx.fillStyle = "rgba(170, 210, 90, 0.55)";
+  ellipse(ctx, -10 * Math.sign(slug.vx || 1), -1, 7, 2);
+  ctx.fillStyle = "#5d7a28";
+  ellipse(ctx, 0, -4 * flat, slug.w / 2, 5.2 * flat);
+  ctx.fillStyle = "#8fbf45";
+  ellipse(ctx, -1, -6 * flat, 7, 3.2 * flat);
+  if (slug.alive) {
+    const bob = Math.sin(slug.t * 7) * 1.6;
+    ctx.strokeStyle = "#3d5a18";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(-4, -7);
+    ctx.lineTo(-6, -13 - bob);
+    ctx.moveTo(4, -7);
+    ctx.lineTo(6, -13 + bob);
+    ctx.stroke();
+    ctx.fillStyle = "#172033";
+    ellipse(ctx, -6, -13 - bob, 1.4, 1.4);
+    ellipse(ctx, 6, -13 + bob, 1.4, 1.4);
+  }
+  ctx.restore();
+}
+
 function drawCoin(ctx, c, time) {
   const spin = 0.35 + Math.abs(Math.sin(time * 5 + c.x)) * 0.65;
   ctx.save();
@@ -764,14 +793,18 @@ function drawHUD(ctx, g, opts = {}) {
   ctx.fillStyle = "#ffe7c2";
   ctx.fillText(`LV ${g.levelNumber || 1}  ${g.levelName || "Snowfield"}`, VIEW_W / 2, 34);
 
-  ctx.textAlign = "right";
-  ctx.font = "800 12px Trebuchet MS, sans-serif";
+  ctx.textAlign = "left";
+  ctx.fillStyle = "rgba(23,32,51,0.72)";
+  ctx.fillRect(8, 66, 54, 16);
   ctx.fillStyle = "#ffd56a";
   ctx.beginPath();
-  ctx.arc(VIEW_W - 52, 16, 6, 0, Math.PI * 2);
+  ctx.arc(18, 74, 5, 0, Math.PI * 2);
   ctx.fill();
+  ctx.font = "800 12px Trebuchet MS, sans-serif";
+  ctx.fillStyle = "#172033";
+  ctx.fillText(String(g.coins), 28, 79);
   ctx.fillStyle = "#fff";
-  ctx.fillText(String(g.coins), VIEW_W - 16, 20);
+  ctx.fillText(String(g.coins), 27, 78);
 
   if (g.mode === "run") {
     ctx.save();
@@ -895,6 +928,7 @@ export function draw(ctx, g, opts = {}) {
     if (seg.kind !== "ground") continue;
     if (seg.x > g.camX + VIEW_W + 30 || seg.x + seg.w < g.camX - 30) continue;
     for (const o of seg.obs) drawObstacle(ctx, o, seg.y);
+    for (const slug of seg.slugs || []) drawSlug(ctx, slug);
     for (const c of seg.coins) if (!c.got) drawCoin(ctx, c, g.time);
   }
   for (const seg of g.segments) {

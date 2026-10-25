@@ -35,6 +35,9 @@ export function createBot() {
       if (!want && !soak && look.obs && look.obs.dist < 40 && look.obs.dist > 6 && p.y > look.obs.top + 3) {
         want = true;
       }
+      if (!want && !soak && look.slug && look.slug.dist < 46 && look.slug.dist > 10) {
+        want = true;
+      }
       if (!want && pitNear && look.pit.skippable && p.heat <= 40) {
         const maxDist = Math.min(42, jumpReach(spd) - look.pit.w - 8);
         if (look.pit.dist < maxDist && look.pit.dist > 4) want = true;

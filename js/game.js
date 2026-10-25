@@ -80,6 +80,11 @@ const LINES = {
     "Jimmy forgot the ice hole.",
     "Melted from sheer enthusiasm.",
   ],
+  slug: [
+    "The slugs found him first.",
+    "Jimmy is not a salad.",
+    "That is a rude way to crawl.",
+  ],
   fall: [
     "That hole was not ice.",
     "Jimmy tried flying. Briefly.",
@@ -121,6 +126,7 @@ function pushSegment(g, spec) {
     sign: spec.sign || null,
     obs: [],
     coins: [],
+    slugs: [],
   };
   if (spec.obs) {
     for (const o of spec.obs) {
@@ -151,6 +157,19 @@ function pushSegment(g, spec) {
     }
     addCoinArc(seg, x0, x1, 58, lift);
   }
+  if (spec.slugs && spec.kind === "ground") {
+    for (const slug of spec.slugs) {
+      seg.slugs.push({
+        x: seg.x + slug.at,
+        vx: slug.vx || 18,
+        w: 26,
+        h: 11,
+        alive: true,
+        t: 0,
+        gone: 0,
+      });
+    }
+  }
   if (spec.kind === "gap" && spec.arc) {
     for (let i = 0; i < 3; i++) {
       const t = (i + 1) / 4;
@@ -174,7 +193,7 @@ const INTRO = [
   { kind: "gap", w: 62, arc: true },
   { kind: "ground", w: 320, coins: 4 },
   { kind: "pit", w: 220, sign: "COOL OFF" },
-  { kind: "ground", w: 300, coins: 4 },
+  { kind: "ground", w: 300, coins: 4, slugs: [{ at: 150, vx: 18 }] },
   {
     kind: "ground",
     w: 460,
@@ -281,6 +300,11 @@ function addProcedural(g) {
     }
   }
   if (!spec.obs.length) delete spec.obs;
+  if (g.rng() < 0.42 && w > 240) {
+    const at = Math.round(80 + g.rng() * Math.max(40, w - 180));
+    const blocked = (spec.obs || []).some((o) => at > o.at - 30 && at < o.at + o.w + 30);
+    if (!blocked) spec.slugs = [{ at, vx: (g.rng() < 0.5 ? 1 : -1) * (14 + g.rng() * 12) }];
+  }
   if (g.rng() < 0.88) {
     spec.coins = 1;
     spec.coinLift = 40 + Math.min(d, 1.4) * 10;
@@ -454,6 +478,67 @@ function resolveX(g, p) {
   }
 }
 
+function stepSlugs(g, dt, prevY) {
+  const p = g.player;
+  for (const s of g.segments) {
+    if (!s.slugs || !s.slugs.length) continue;
+    for (let i = s.slugs.length - 1; i >= 0; i--) {
+      const slug = s.slugs[i];
+      if (!slug.alive) {
+        slug.gone += dt;
+        if (slug.gone > 0.45) s.slugs.splice(i, 1);
+        continue;
+      }
+      slug.t += dt;
+      slug.x += slug.vx * dt;
+      const left = s.x + 12;
+      const right = s.x + s.w - 12 - slug.w;
+      if (slug.x < left) {
+        slug.x = left;
+        slug.vx = Math.abs(slug.vx);
+      } else if (slug.x > right) {
+        slug.x = right;
+        slug.vx = -Math.abs(slug.vx);
+      }
+      for (const o of s.obs) {
+        if (slug.x + slug.w > o.x - 2 && slug.x < o.x + o.w + 2) {
+          slug.vx *= -1;
+          slug.x += Math.sign(slug.vx) * 4;
+        }
+      }
+    }
+  }
+  if (p.mercy > 0 || p.inPit || (g.phin && g.phin.phase !== "leap")) return;
+  if (g.state !== "play" && g.state !== "title") return;
+  for (const s of nearSegments(g, p.x)) {
+    if (!s.slugs) continue;
+    for (const slug of s.slugs) {
+      if (!slug.alive) continue;
+      const top = GROUND_Y - slug.h;
+      const overlapX = p.x + 7 > slug.x + 2 && p.x - 7 < slug.x + slug.w - 2;
+      if (!overlapX) continue;
+      const stomping = p.vy > 40 && prevY <= top + 3 && p.y >= top - 4;
+      if (stomping) {
+        slug.alive = false;
+        p.vy = -420;
+        p.y = Math.min(p.y, top - 1);
+        p.onGround = false;
+        g.coins += 1;
+        g.style += 15;
+        g.sfx.push("squish");
+        g.floaters.push({ text: "+1", x: slug.x + 8, y: top - 8, life: 0.7, max: 0.7 });
+        refreshHelps(g);
+        burst(g, slug.x + 10, top, 7, "#7dce6a", 90);
+        return;
+      }
+      if (p.y > top + 3 && p.y - PLAYER_H < GROUND_Y - 1) {
+        kill(g, "slug");
+        return;
+      }
+    }
+  }
+}
+
 function tryLand(g, p, prevY) {
   if (p.vy < 0) return false;
   let best = null;
@@ -516,6 +601,9 @@ function isClear(g, x) {
   for (const o of s.obs) {
     if (x > o.x - 18 && x < o.x + o.w + 18) return false;
   }
+  for (const slug of s.slugs || []) {
+    if (slug.alive && x > slug.x - 16 && x < slug.x + slug.w + 16) return false;
+  }
   return true;
 }
 
@@ -529,7 +617,7 @@ function kill(g, reason) {
   g.line = LINES[reason][g.deathLog.length % LINES[reason].length];
   g.shake = reason === "lava" ? 7 : 5;
   g.state = "melt";
-  g.sfx.push("melt");
+  g.sfx.push(reason === "slug" ? "squelch" : "melt");
   if (g.mode === "run") p.lives = Math.max(0, p.lives - 1);
   g.deathLog.push({ reason, x: p.x, t: g.time, lives: p.lives });
   g.phin = null;
@@ -973,6 +1061,11 @@ function stepPlay(g, dt, input) {
 
   const prevY = p.y;
   p.y += p.vy * dt;
+  stepSlugs(g, dt, prevY);
+  if (g.state === "melt") {
+    stepDecor(g, dt);
+    return;
+  }
   const landed = tryLand(g, p, prevY);
   if (!landed) {
     p.onGround = false;
@@ -1182,6 +1275,7 @@ export function lookAhead(g) {
   let gap = null;
   let pit = null;
   let obs = null;
+  let slug = null;
   for (const s of g.segments) {
     if (s.x + s.w < p.x - 30) continue;
     if (s.x > p.x + 260) break;
@@ -1207,6 +1301,11 @@ export function lookAhead(g) {
           obs = { dist, w: o.w, h: o.h, x: o.x, top: s.y - o.h };
         }
       }
+      for (const enemy of s.slugs || []) {
+        if (!enemy.alive || slug) continue;
+        const dist = enemy.x - (p.x + 6);
+        if (dist > -enemy.w && dist < 150) slug = { dist, w: enemy.w, x: enemy.x };
+      }
     }
   }
   const here = pitAt(g, p.x);
@@ -1216,6 +1315,7 @@ export function lookAhead(g) {
     pit,
     obs,
     pitHere,
+    slug,
     lead: p.x - g.lavaX,
     cruise,
     reach,

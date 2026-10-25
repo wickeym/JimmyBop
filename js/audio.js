@@ -104,6 +104,14 @@ export function createAudio() {
       noise(0.18, 0.06);
       tone(880, 0.1, "sine", 0.04, 440);
     }
+    else if (name === "squish") {
+      noise(0.12, 0.07);
+      tone(180, 0.08, "sine", 0.05, 90);
+    }
+    else if (name === "squelch") {
+      noise(0.22, 0.08);
+      tone(140, 0.16, "sawtooth", 0.03, 70);
+    }
     else if (name === "coin") {
       tone(880, 0.08, "square", 0.05);
       tone(1320, 0.1, "square", 0.04);
