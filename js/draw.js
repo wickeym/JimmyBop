@@ -5,7 +5,7 @@ import {
   VIEW_H,
   VIEW_W,
   expression,
-} from "./game.js";
+} from "./game.js?v=walk";
 
 const SCENES = [
   { sky: ["#241848", "#6d7ec4", "#f08a62", "#ffd0a0"], mountain: ["#9b8cbe", "#64548a", "#3c3158"], snow: "#f7fbff", crust: "#d7e6f4", dirt: "#3a2d4a", brick: "#2a2138", volcano: "#2c2344", trees: "pine", bits: "stars", light: "moon", snowCaps: true, relief: 1 },
@@ -48,16 +48,20 @@ function worldLook(g) {
   };
 }
 
+function parseColor(c) {
+  if (c[0] === "#") {
+    const hex = c.length === 4 ? c.slice(1).replace(/./g, (ch) => ch + ch) : c.slice(1);
+    const n = parseInt(hex, 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  }
+  const m = c.match(/\d+/g);
+  return [+m[0], +m[1], +m[2]];
+}
+
 function mix(a, b, t) {
   t = Math.max(0, Math.min(1, t));
-  const pa = parseInt(a.slice(1), 16);
-  const pb = parseInt(b.slice(1), 16);
-  const ar = (pa >> 16) & 255;
-  const ag = (pa >> 8) & 255;
-  const ab = pa & 255;
-  const br = (pb >> 16) & 255;
-  const bg = (pb >> 8) & 255;
-  const bb = pb & 255;
+  const [ar, ag, ab] = parseColor(a);
+  const [br, bg, bb] = parseColor(b);
   return `rgb(${(ar + (br - ar) * t) | 0},${(ag + (bg - ag) * t) | 0},${(ab + (bb - ab) * t) | 0})`;
 }
 
@@ -286,10 +290,29 @@ function drawPit(ctx, seg, time) {
   water.addColorStop(1, "#e9fbff");
   ctx.fillStyle = water;
   ctx.fillRect(seg.x + 1, y + 3, seg.w - 2, PIT_DEPTH - 1);
-  ctx.fillStyle = "rgba(255,255,255,0.55)";
-  ellipse(ctx, seg.x + seg.w * 0.35, y + 8, 8, 2);
-  ctx.fillStyle = "#f7fbff";
-  ctx.fillRect(seg.x, y + 1, seg.w, 4);
+  ctx.fillStyle = mix("#f7fbff", "#ffe7a8", Math.min(1, fill));
+  ctx.fillRect(seg.x, y + 1, seg.w, 3);
+  const bergs = seg.w > 150 ? 3 : 2;
+  const heat = Math.min(1, fill * 1.15);
+  for (let i = 0; i < bergs; i++) {
+    const span = Math.max(16, seg.w - 24);
+    const bx = seg.x + 10 + ((i * 42 + time * 12) % span);
+    const by = y + 8 + Math.sin(time * 2.1 + i * 1.4) * 1.3;
+    const s = 10 + (i % 2) * 4;
+    ctx.fillStyle = mix("#f4fbff", "#ffd0a0", heat * 0.4);
+    ctx.beginPath();
+    ctx.moveTo(bx, y + 7);
+    ctx.lineTo(bx + s * 0.45, y - 7);
+    ctx.lineTo(bx + s, y + 5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = mix("#d7f3ff", "#7ec8ea", heat * 0.3);
+    ctx.beginPath();
+    ctx.moveTo(bx + 2, y + 7);
+    ctx.lineTo(bx + s * 0.45, y + 2);
+    ctx.lineTo(bx + s - 2, y + 6);
+    ctx.fill();
+  }
   ctx.strokeStyle = "rgba(255,255,255,0.8)";
   ctx.lineWidth = 1;
   const shimmer = (time * 30) % seg.w;
@@ -305,8 +328,20 @@ function drawPit(ctx, seg, time) {
 }
 
 function drawObstacle(ctx, o, groundY) {
+  const melt = o.melt || 0;
+  ctx.save();
+  ctx.translate(o.x + o.w * 0.3, groundY);
+  ctx.rotate((o.tip || 0) * 0.8);
+  ctx.translate(-(o.x + o.w * 0.3), -groundY);
   const x = o.x;
   const y = groundY - o.h;
+  ctx.save();
+  if (melt > 0.02) {
+    const keep = Math.max(2, o.h * (1 - melt * 0.94));
+    ctx.beginPath();
+    ctx.rect(x - 16, y - 18, o.w + 36, keep + 18);
+    ctx.clip();
+  }
   if (o.k === "crate") {
     ctx.fillStyle = "#6b3d22";
     ctx.fillRect(x, y, o.w, o.h);
@@ -344,12 +379,59 @@ function drawObstacle(ctx, o, groundY) {
     ellipse(ctx, x + o.w / 2, y + 6, 11, 10);
     ctx.fillStyle = "#f7fbff";
     ctx.fillRect(x + 1, y + o.h - 4, o.w - 2, 4);
+  } else if (o.k === "fence") {
+    ctx.fillStyle = "#f4fbff";
+    ctx.fillRect(x, y + o.h - 4, o.w, 4);
+    ctx.fillStyle = "#8d6a43";
+    ctx.fillRect(x + 2, y, 3, o.h);
+    ctx.fillRect(x + o.w - 5, y, 3, o.h);
+    ctx.fillRect(x, y + 4, o.w, 3);
+    ctx.fillRect(x, y + 10, o.w, 3);
+  } else if (o.k === "mailbox") {
+    ctx.fillStyle = "#6b3d22";
+    ctx.fillRect(x + o.w / 2 - 2, y + 10, 4, o.h - 10);
+    ctx.fillStyle = "#3d7dff";
+    ctx.fillRect(x, y, o.w, 12);
+    ctx.fillStyle = "#ff5a1f";
+    ctx.beginPath();
+    ctx.moveTo(x + o.w, y + 4);
+    ctx.lineTo(x + o.w + 6, y + 6);
+    ctx.lineTo(x + o.w, y + 8);
+    ctx.fill();
+  } else if (o.k === "car") {
+    ctx.fillStyle = "#e23b2f";
+    ctx.fillRect(x, y + 6, o.w, o.h - 8);
+    ctx.fillStyle = "#c4322a";
+    ctx.fillRect(x + 6, y, o.w - 14, 8);
+    ctx.fillStyle = "#8fd4ff";
+    ctx.fillRect(x + 8, y + 2, 6, 4);
+    ctx.fillRect(x + o.w - 16, y + 2, 6, 4);
+    ctx.fillStyle = "#172033";
+    ellipse(ctx, x + 8, y + o.h - 3, 4, 4);
+    ellipse(ctx, x + o.w - 8, y + o.h - 3, 4, 4);
   } else {
     ctx.fillStyle = "#3a3148";
     ellipse(ctx, x + o.w / 2, y + o.h * 0.65, o.w / 2, o.h * 0.55);
     ctx.fillStyle = "#f7fbff";
     ellipse(ctx, x + o.w / 2, y + 4, o.w / 2.2, 4);
   }
+  ctx.restore();
+  if (melt > 0.02) {
+    const cut = y + o.h * melt * 0.94;
+    ctx.fillStyle = "#1a0a08";
+    ctx.fillRect(x - 1, cut - 3, o.w + 2, 4);
+    ctx.fillStyle = "#ffb15a";
+    ctx.fillRect(x, cut - 1, o.w, 2);
+    ctx.fillStyle = "rgba(255, 70, 16, 0.9)";
+    ctx.beginPath();
+    ctx.moveTo(x - 2, groundY);
+    ctx.quadraticCurveTo(x + o.w * 0.5, cut - 6, x + o.w + 8, groundY);
+    ctx.lineTo(x + o.w, groundY);
+    ctx.fill();
+    ctx.fillStyle = "#fff1c4";
+    ellipse(ctx, x + o.w * 0.45, cut, 2.2, 1.4);
+  }
+  ctx.restore();
 }
 
 function drawSign(ctx, seg) {
@@ -567,113 +649,363 @@ function drawBits(ctx, g) {
   }
 }
 
-function lavaFront(x, y, t) {
-  const wave = Math.sin(t * 5.2 + y * 0.075) * 5 + Math.sin(t * 2.1 + y * 0.031) * 3;
-  const drip = Math.sin(y * 0.19 + t * 2.6) > 0.62 ? 9 : 0;
-  return x + 5 + wave + drip;
+function lavaSurface(x, px, t) {
+  const dist = Math.max(0, x - px);
+  const crest = Math.exp(-(dist * dist) / 2200);
+  const roll = Math.sin(t * 2.2 + px * 0.045) * 3.2 + Math.sin(t * 4.1 + px * 0.09) * 1.6;
+  return GROUND_Y - 30 - crest * 34 + roll;
 }
 
 function drawLava(ctx, g) {
   const x = g.lavaX;
   const t = g.time;
-  const top = 154;
-  const left = Math.min(g.camX - 80, x - 80);
-  const frontAt = (y) => lavaFront(x, y, t);
+  const left = Math.min(g.camX - 30, x - 30);
 
   ctx.save();
-  const glow = ctx.createLinearGradient(x, 0, x + 26, 0);
-  glow.addColorStop(0, "rgba(255, 160, 50, 0.38)");
-  glow.addColorStop(1, "rgba(255, 70, 10, 0)");
-  ctx.fillStyle = glow;
-  ctx.fillRect(x, GROUND_Y - 10, 28, 16);
-
   ctx.beginPath();
-  ctx.moveTo(left, VIEW_H + 6);
-  ctx.lineTo(left, top + 4);
-  const span = Math.max(48, x - left);
-  const steps = Math.max(6, Math.ceil(span / 36));
-  for (let i = 0; i <= steps; i++) {
-    const px = left + (span * i) / steps;
-    const wave = Math.sin(t * 1.7 + px * 0.03) * 7 + Math.sin(px * 0.055 + t * 0.8) * 4;
-    ctx.lineTo(px, top + wave);
+  ctx.moveTo(left, VIEW_H + 10);
+  ctx.lineTo(left, lavaSurface(x, left, t));
+  const steps = Math.max(8, Math.ceil((x - left) / 18));
+  for (let i = 1; i <= steps; i++) {
+    const px = left + ((x - left) * i) / steps;
+    ctx.lineTo(px, lavaSurface(x, px, t));
   }
-  ctx.lineTo(frontAt(top + 8), top + Math.sin(t * 1.7 + x * 0.03) * 7);
-  for (let i = 1; i <= 26; i++) {
-    const fy = top + ((VIEW_H + 8 - top) * i) / 26;
-    ctx.lineTo(frontAt(fy), fy);
-  }
+  const nose = lavaSurface(x, x, t);
+  ctx.quadraticCurveTo(x + 16, nose - 6, x + 26, GROUND_Y - 18);
+  ctx.quadraticCurveTo(x + 34, GROUND_Y + 6, x + 8, GROUND_Y + 14);
+  ctx.lineTo(x - 8, VIEW_H + 10);
   ctx.closePath();
 
-  const body = ctx.createLinearGradient(x - 260, 0, x + 16, 0);
-  body.addColorStop(0, "#3c0806");
-  body.addColorStop(0.28, "#8e120c");
-  body.addColorStop(0.62, "#e32210");
-  body.addColorStop(0.86, "#ff5a14");
-  body.addColorStop(1, "#ffd36a");
+  const body = ctx.createLinearGradient(0, GROUND_Y - 70, 0, VIEW_H);
+  body.addColorStop(0, "#ffe7a8");
+  body.addColorStop(0.08, "#ff7a22");
+  body.addColorStop(0.28, "#e02810");
+  body.addColorStop(0.7, "#8a140c");
+  body.addColorStop(1, "#3a0806");
   ctx.fillStyle = body;
   ctx.fill();
   ctx.clip();
 
-  ctx.fillStyle = "rgba(255, 214, 130, 0.85)";
-  for (let i = 0; i <= steps; i++) {
-    const px = left + (span * i) / steps;
-    const wave = Math.sin(t * 1.7 + px * 0.03) * 7 + Math.sin(px * 0.055 + t * 0.8) * 4;
-    ellipse(ctx, px, top + wave + 4, 10, 2.4);
+  ctx.strokeStyle = "rgba(255, 236, 170, 0.9)";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(left, lavaSurface(x, left, t));
+  for (let i = 1; i <= steps; i++) {
+    const px = left + ((x - left) * i) / steps;
+    ctx.lineTo(px, lavaSurface(x, px, t) + 2);
+  }
+  ctx.stroke();
+
+  for (let i = 0; i < 8; i++) {
+    const cycle = 160 + hash(i * 3) * 80;
+    const px = x - 20 - ((t * (22 + hash(i) * 18) + hash(i * 5) * cycle) % cycle);
+    if (px < g.camX - 20) continue;
+    const py = lavaSurface(x, px, t) + 10 + (i % 3) * 8;
+    ctx.fillStyle = i % 2 ? "rgba(255, 210, 90, 0.75)" : "rgba(120, 24, 12, 0.45)";
+    ellipse(ctx, px, py, 12, 2.4);
+  }
+  ctx.restore();
+
+  ctx.fillStyle = "#fff6d2";
+  ctx.beginPath();
+  ctx.moveTo(x + 4, nose + 4);
+  ctx.quadraticCurveTo(x + 20, GROUND_Y - 28, x + 30, GROUND_Y - 6);
+  ctx.quadraticCurveTo(x + 18, GROUND_Y - 10, x + 6, nose + 10);
+  ctx.fill();
+
+  const glow = ctx.createLinearGradient(x, GROUND_Y, x + 36, GROUND_Y);
+  glow.addColorStop(0, "rgba(255, 150, 40, 0.45)");
+  glow.addColorStop(1, "rgba(255, 80, 10, 0)");
+  ctx.fillStyle = glow;
+  ctx.fillRect(x + 8, GROUND_Y - 8, 36, 14);
+  drawSpills(ctx, g);
+}
+
+function drawSpills(ctx, g) {
+  for (const s of g.segments) {
+    if (s.kind !== "ground") continue;
+    if (s.x > g.camX + VIEW_W + 40 || s.x + s.w < g.camX - 40) continue;
+    for (const o of s.obs) {
+      if (!o.spill || (o.melt || 0) > 0.92) continue;
+      const melt = o.melt || 0;
+      const crest = GROUND_Y - o.h * (1 - melt * 0.9);
+      ctx.fillStyle = "rgba(255, 120, 30, 0.85)";
+      ctx.beginPath();
+      ctx.moveTo(o.x - 4, GROUND_Y);
+      ctx.quadraticCurveTo(o.x + o.w * 0.4, crest, o.x + o.w + 6, GROUND_Y - 2);
+      ctx.lineTo(o.x + o.w, GROUND_Y);
+      ctx.fill();
+      ctx.fillStyle = "#fff6d0";
+      ellipse(ctx, o.x + o.w * 0.5, crest + 1, 2.4, 1.3);
+    }
+  }
+}
+
+const BLOCK_BACK = 122;
+const BLOCK_SHEAR = 46;
+const LOT = 118;
+const BLOCK_SPAN = GROUND_Y - BLOCK_BACK;
+
+function blockAt(worldX, depth) {
+  return [worldX + depth * BLOCK_SHEAR, GROUND_Y - depth * BLOCK_SPAN];
+}
+
+function fillPoly(ctx, pts) {
+  ctx.beginPath();
+  ctx.moveTo(pts[0][0], pts[0][1]);
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function drawNeighborhood(ctx, g) {
+  const look = worldLook(g);
+  const burn = Math.min(1, (look.index || 0) / 5);
+  const grass = mix("#7eae5c", look.dirt, burn * 0.85);
+  const grassFar = mix("#4d7a3e", look.dirt, Math.min(1, burn * 0.9 + 0.15));
+  const walk = mix("#e4ddd2", "#5c463c", burn * 0.72);
+  const hedge = mix("#2c5a30", "#140c0a", Math.min(1, burn * 1.1));
+  const walls = ["#f6d7b8", "#f3eee4", "#e07d64", "#d7e0cc", "#f7f3ea", "#f0c56e"];
+  const roofs = ["#8d4530", "#4a5c78", "#a33b32", "#3d4e3c", "#6b3d22", "#8a5a28"];
+  const x0 = g.camX - 90;
+  const x1 = g.camX + VIEW_W + 90;
+
+  const yard = ctx.createLinearGradient(0, BLOCK_BACK, 0, GROUND_Y);
+  yard.addColorStop(0, grassFar);
+  yard.addColorStop(1, grass);
+  ctx.fillStyle = yard;
+  fillPoly(ctx, [blockAt(x0, 0), blockAt(x1, 0), blockAt(x1, 1), blockAt(x0, 1)]);
+
+  ctx.fillStyle = hedge;
+  fillPoly(ctx, [blockAt(x0, 0.86), blockAt(x1, 0.86), blockAt(x1, 1), blockAt(x0, 1)]);
+
+  const i0 = Math.floor((x0 - BLOCK_SHEAR) / LOT) - 1;
+  const i1 = Math.ceil(x1 / LOT) + 1;
+  for (let i = i0; i <= i1; i++) {
+    drawLot(ctx, g, i, { burn, grass, walk, walls, roofs });
   }
 
-  for (let i = 0; i < 16; i++) {
-    const cycle = 150 + hash(i * 3) * 90;
-    const speed = 16 + hash(i * 9) * 22;
-    const px = x - 18 - ((t * speed + hash(i) * cycle) % cycle);
-    if (px < g.camX - 30) continue;
-    const py = top + 12 + hash(i * 13) * (VIEW_H - top - 16);
-    ctx.fillStyle = hash(i * 5) > 0.4 ? "#2c0604" : "#5a100c";
-    ellipse(ctx, px, py, 9 + hash(i * 7) * 14, 3.2 + hash(i * 11) * 3.4);
+  const dWalk = 0.16;
+  ctx.fillStyle = walk;
+  fillPoly(ctx, [blockAt(x0, 0), blockAt(x1, 0), blockAt(x1, dWalk), blockAt(x0, dWalk)]);
+  ctx.strokeStyle = mix("#c8bfb2", "#2a1814", burn * 0.6);
+  ctx.lineWidth = 1;
+  const seam0 = Math.floor(x0 / 32) * 32;
+  for (let x = seam0; x < x1; x += 32) {
+    const a = blockAt(x, 0.01);
+    const b = blockAt(x, dWalk);
+    ctx.beginPath();
+    ctx.moveTo(a[0], a[1]);
+    ctx.lineTo(b[0], b[1]);
+    ctx.stroke();
   }
+  ctx.strokeStyle = "rgba(255,255,255,0.28)";
+  ctx.beginPath();
+  const lipL = blockAt(x0, dWalk);
+  const lipR = blockAt(x1, dWalk);
+  ctx.moveTo(lipL[0], lipL[1]);
+  ctx.lineTo(lipR[0], lipR[1]);
+  ctx.stroke();
+  ctx.fillStyle = mix("#8d847a", "#241410", burn * 0.5);
+  ctx.fillRect(x0, GROUND_Y - 3, x1 - x0, 3);
 
-  for (let row = 0; row < 7; row++) {
-    const py = top + 20 + row * 16 + Math.sin(t * 1.4 + row) * 2;
-    ctx.fillStyle = row % 2 === 0 ? "rgba(255, 214, 90, 0.9)" : "rgba(255, 120, 30, 0.7)";
-    for (let k = 0; k < 5; k++) {
-      const px = x - 14 - ((t * 28 + row * 18 + k * 32) % 170);
-      if (px < g.camX - 16) continue;
-      ellipse(ctx, px, py, 6 + (k % 2) * 3, 1.7);
+  for (let i = i0; i <= i1; i++) drawMailbox(ctx, g, i, burn);
+}
+
+function drawLot(ctx, g, i, theme) {
+  const lotX = i * LOT;
+  const eaten = Math.max(0, Math.min(1, ((g.lavaX || 0) - lotX) / LOT));
+  const lawn = mix(hash(i * 19) > 0.48 ? theme.grass : mix(theme.grass, "#d2e29a", 0.45), "#1c0c0a", eaten * 0.82);
+  ctx.fillStyle = lawn;
+  fillPoly(ctx, [blockAt(lotX, 0.16), blockAt(lotX + LOT, 0.16), blockAt(lotX + LOT, 0.88), blockAt(lotX, 0.88)]);
+  ctx.strokeStyle = "rgba(20, 16, 8, 0.22)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  const edgeA = blockAt(lotX, 0.16);
+  const edgeB = blockAt(lotX, 0.88);
+  ctx.moveTo(edgeA[0], edgeA[1]);
+  ctx.lineTo(edgeB[0], edgeB[1]);
+  ctx.stroke();
+
+  if (eaten > 0.97) return;
+
+  const kind = Math.floor(hash(i * 3) * 5);
+  let hw = 46 + Math.floor(hash(i * 5) * 14);
+  if (kind === 2 || kind === 3) hw += 12;
+  const inset = 18 + Math.floor(hash(i * 9) * 8);
+  hw = Math.min(hw, LOT - inset - 16);
+  const hx = lotX + inset;
+  let wallH = 24 + Math.floor(hash(i * 11) * 8);
+  let rise = 11;
+  if (kind === 1) wallH += 12;
+  if (kind === 4) {
+    wallH = 12;
+    rise = 24;
+    hw = Math.min(hw, 50);
+  }
+  if (kind === 2 || kind === 3) {
+    wallH = kind === 3 ? 22 : 20;
+    rise = 0;
+  }
+  const d0 = 0.46;
+  const d1 = 0.8;
+  const doorX = hx + hw * 0.5;
+  const pathHalf = kind === 3 ? 13 : 5;
+  ctx.fillStyle = mix(theme.walk, lawn, 0.22);
+  fillPoly(ctx, [
+    blockAt(doorX - pathHalf, 0.15),
+    blockAt(doorX + pathHalf, 0.15),
+    blockAt(doorX + pathHalf, d0 - 0.02),
+    blockAt(doorX - pathHalf, d0 - 0.02),
+  ]);
+
+  const wall = mix(theme.walls[Math.floor(hash(i * 7) * theme.walls.length)], "#2a1210", Math.max(theme.burn * 0.35, eaten * 0.88));
+  const roof = mix(theme.roofs[Math.floor(hash(i * 11) * theme.roofs.length)], "#1a0c0a", Math.max(theme.burn * 0.45, eaten));
+  const win = eaten > 0.35 || theme.burn > 0.55 ? "#ffb15a" : "#b7e4fb";
+
+  ctx.save();
+  if (eaten > 0.04) {
+    const anchor = blockAt(hx, d0);
+    ctx.translate(anchor[0], anchor[1]);
+    ctx.scale(1, Math.max(0.12, 1 - eaten * 0.78));
+    ctx.translate(-anchor[0], -anchor[1]);
+  }
+  drawHouseBlock(ctx, { hx, hw, d0, d1, wallH, rise, kind, wall, roof, win, i });
+  ctx.restore();
+
+  if (eaten < 0.45 && theme.burn < 0.7) {
+    const treeX = hx + hw + 12;
+    if (treeX < lotX + LOT - 8 && hash(i + 4) > 0.42) {
+      const [tx, ty] = blockAt(treeX, 0.32);
+      ctx.fillStyle = "rgba(20, 16, 8, 0.22)";
+      ellipse(ctx, tx + 2, ty + 1, 7, 2.2);
+      ctx.fillStyle = "#6b4228";
+      ctx.fillRect(tx - 1, ty - 14, 2, 14);
+      ctx.fillStyle = mix("#3f8a3a", "#1a120c", theme.burn);
+      ellipse(ctx, tx, ty - 16, 8, 6.5);
+      ellipse(ctx, tx + 4, ty - 13, 5, 4.5);
+    } else if (hash(i + 6) > 0.5) {
+      const [bx, by] = blockAt(lotX + 10, 0.34);
+      ctx.fillStyle = mix("#3f8a3a", "#1a120c", theme.burn);
+      ellipse(ctx, bx, by - 3, 5, 3.5);
+    }
+    if (theme.burn < 0.35 && hash(i + 21) > 0.55) {
+      const [fx, fy] = blockAt(hx - 8, 0.36);
+      ctx.fillStyle = hash(i + 2) > 0.5 ? "#e23b2f" : "#ffd56a";
+      ellipse(ctx, fx, fy, 1.5, 1.5);
     }
   }
 
-  ctx.fillStyle = "#ffe08a";
-  for (let i = 0; i < 8; i++) {
-    const cycle = 120 + hash(i * 8) * 60;
-    const px = x - 22 - ((t * 14 + hash(i * 4) * cycle) % cycle);
-    const py = top + 16 + hash(i * 19) * (VIEW_H - top - 28);
-    ctx.save();
-    ctx.translate(px, py);
-    ctx.rotate(-0.5 + hash(i) * 1);
-    ctx.fillRect(-1, 0, 2.2, 7 + hash(i * 29) * 10);
-    ctx.restore();
+  if (eaten > 0.05 && eaten < 0.96) {
+    ctx.fillStyle = "#ff6a1a";
+    ctx.globalAlpha = 0.28 + eaten * 0.4;
+    fillPoly(ctx, [blockAt(lotX, 0.2), blockAt(lotX + 7, 0.2), blockAt(lotX + 10, 0.86), blockAt(lotX, 0.86)]);
+    ctx.globalAlpha = 1;
+  }
+}
+
+function drawHouseBlock(ctx, spec) {
+  const { hx, hw, d0, d1, wallH, rise, kind, wall, roof, win } = spec;
+  const fl = blockAt(hx, d0);
+  const fr = blockAt(hx + hw, d0);
+  const br = blockAt(hx + hw, d1);
+  const bl = blockAt(hx, d1);
+  const up = (p, h) => [p[0], p[1] - h];
+  const ftl = up(fl, wallH);
+  const ftr = up(fr, wallH);
+  const btr = up(br, wallH);
+  const btl = up(bl, wallH);
+
+  ctx.fillStyle = "rgba(28, 14, 10, 0.28)";
+  fillPoly(ctx, [
+    blockAt(hx + 2, d0 - 0.07),
+    blockAt(hx + hw + 5, d0 - 0.07),
+    blockAt(hx + hw + 1, d0 + 0.01),
+    blockAt(hx + 3, d0 + 0.01),
+  ]);
+
+  ctx.fillStyle = mix(wall, "#140c0a", 0.28);
+  fillPoly(ctx, [fr, br, btr, ftr]);
+  ctx.fillStyle = wall;
+  fillPoly(ctx, [fl, fr, ftr, ftl]);
+
+  if (rise <= 0) {
+    const slab = 5;
+    const tl = [ftl[0] - 2, ftl[1] - slab];
+    const tr = [ftr[0] + 3, ftr[1] - slab];
+    const tbr = [btr[0] + 3, btr[1] - slab];
+    const tbl = [btl[0] - 2, btl[1] - slab];
+    ctx.fillStyle = mix(roof, "#140c0a", 0.22);
+    fillPoly(ctx, [ftr, btr, tbr, tr]);
+    ctx.fillStyle = roof;
+    fillPoly(ctx, [ftl, ftr, tr, tl]);
+    ctx.fillStyle = mix(roof, "#fff4e0", 0.16);
+    fillPoly(ctx, [tl, tr, tbr, tbl]);
+  } else {
+    const peak = [(ftl[0] + ftr[0]) / 2, ftl[1] - rise];
+    const peakB = [peak[0] + (br[0] - fr[0]), peak[1] + (br[1] - fr[1])];
+    ctx.fillStyle = mix(roof, "#140c0a", 0.2);
+    fillPoly(ctx, [ftr, peak, peakB, btr]);
+    ctx.fillStyle = roof;
+    fillPoly(ctx, [[ftl[0] - 2, ftl[1]], peak, [ftr[0] + 2, ftr[1]]]);
   }
 
-  for (let i = 0; i < 8; i++) {
-    const phase = (t * 0.45 + hash(i * 17)) % 1;
-    const py = VIEW_H - 16 - phase * (VIEW_H - top - 28);
-    const px = x - 12 - hash(i * 4) * 70;
-    ctx.fillStyle = phase > 0.82 ? "#fff6d4" : "#ffc14a";
-    ellipse(ctx, px, py, 1.5 + phase * 2, 1.3 + phase * 1.5);
+  if (hash(spec.i + 4) > 0.4 && kind !== 4) {
+    const along = rise <= 0 ? 0.55 : 0.4;
+    const c = blockAt(hx + hw * 0.68, d0 + (d1 - d0) * along);
+    const top = rise <= 0 ? wallH + 8 : wallH + rise * 0.55;
+    ctx.fillStyle = mix(wall, "#140c0a", 0.18);
+    ctx.fillRect(c[0], c[1] - top - 6, 4, 8);
+    ctx.fillStyle = mix(roof, "#140c0a", 0.35);
+    ctx.fillRect(c[0] - 1, c[1] - top - 7, 6, 2);
   }
 
-  ctx.restore();
-
-  ctx.fillStyle = "#fff3c4";
-  for (let i = 0; i < 14; i++) {
-    const fy = top + 6 + i * ((VIEW_H - top - 4) / 14);
-    const fx = frontAt(fy);
-    const poke = 2 + Math.sin(t * 8 + i * 1.2) * 2;
-    ctx.beginPath();
-    ctx.moveTo(fx - 7, fy);
-    ctx.lineTo(fx + poke, fy + 2.5);
-    ctx.lineTo(fx - 7, fy + 5.5);
-    ctx.fill();
+  const doorW = kind === 3 ? Math.min(24, hw * 0.46) : 7;
+  const doorH = Math.min(wallH - 4, kind === 1 ? 16 : 12);
+  const doorLeft = fl[0] + hw * 0.5 - doorW / 2;
+  ctx.fillStyle = kind === 3 ? "#d7c2a4" : "#5c3828";
+  ctx.fillRect(doorLeft, fl[1] - doorH, doorW, doorH);
+  if (kind === 3) {
+    ctx.fillStyle = "rgba(30, 16, 10, 0.35)";
+    ctx.fillRect(doorLeft, fl[1] - doorH * 0.55, doorW, 1);
+  } else {
+    ctx.fillStyle = "#ffd56a";
+    ctx.fillRect(doorLeft + doorW - 2.5, fl[1] - doorH * 0.48, 1.4, 1.4);
   }
+
+  ctx.fillStyle = win;
+  if (kind !== 3 && kind !== 4) {
+    const wy = fl[1] - wallH + (kind === 1 ? 5 : 6);
+    ctx.fillRect(fl[0] + 5, wy, 6, 5);
+    if (hw > 50) ctx.fillRect(fl[0] + hw - 12, wy, 6, 5);
+    if (kind === 1) {
+      ctx.fillRect(fl[0] + 5, wy + 11, 6, 5);
+      if (hw > 50) ctx.fillRect(fl[0] + hw - 12, wy + 11, 6, 5);
+    }
+  } else if (kind === 4) {
+    ctx.fillRect(fl[0] + hw * 0.5 - 3, fl[1] - wallH - rise * 0.45, 6, 5);
+  }
+
+  const winPts = [];
+  for (const [t, hgt] of [[0.22, 7], [0.58, 7], [0.58, 13], [0.22, 13]]) {
+    const x = fr[0] + (br[0] - fr[0]) * t;
+    const y = fr[1] + (br[1] - fr[1]) * t - hgt;
+    winPts.push([x, y]);
+  }
+  if (kind !== 4) fillPoly(ctx, winPts);
+}
+
+function drawMailbox(ctx, g, i, burn) {
+  const lotX = i * LOT;
+  const eaten = Math.max(0, Math.min(1, ((g.lavaX || 0) - lotX) / LOT));
+  if (eaten > 0.55) return;
+  const [mx, my] = blockAt(lotX + 11, 0.07);
+  ctx.fillStyle = mix("#6b4632", "#1a0c0a", burn * 0.6);
+  ctx.fillRect(mx, my - 12, 2, 12);
+  ctx.fillStyle = mix("#3c5c92", "#1a0c0a", burn * 0.7);
+  ctx.fillRect(mx - 4, my - 16, 10, 5);
+  ctx.fillStyle = hash(i + 8) > 0.55 ? "#e23b2f" : "#f0d36a";
+  ctx.fillRect(mx + 6, my - 18, 1.5, 5);
 }
 
 function drawRiver(ctx, seg, time) {
@@ -917,6 +1249,8 @@ export function draw(ctx, g, opts = {}) {
   const showcase = g.mode === "demo" ? -24 : 0;
   ctx.translate(-Math.round(g.camX) + sx, sy + showcase);
 
+  drawNeighborhood(ctx, g);
+
   for (const seg of g.segments) {
     if (seg.x > g.camX + VIEW_W + 30 || seg.x + seg.w < g.camX - 30) continue;
     if (seg.kind === "gap") drawRiver(ctx, seg, g.time);
@@ -927,7 +1261,7 @@ export function draw(ctx, g, opts = {}) {
   for (const seg of g.segments) {
     if (seg.kind !== "ground") continue;
     if (seg.x > g.camX + VIEW_W + 30 || seg.x + seg.w < g.camX - 30) continue;
-    for (const o of seg.obs) drawObstacle(ctx, o, seg.y);
+    for (const o of seg.obs) if (!o.spill) drawObstacle(ctx, o, seg.y);
     for (const slug of seg.slugs || []) drawSlug(ctx, slug);
     for (const c of seg.coins) if (!c.got) drawCoin(ctx, c, g.time);
   }
@@ -939,6 +1273,11 @@ export function draw(ctx, g, opts = {}) {
   }
 
   drawLava(ctx, g);
+  for (const seg of g.segments) {
+    if (seg.kind !== "ground") continue;
+    if (seg.x > g.camX + VIEW_W + 40 || seg.x + seg.w < g.camX - 40) continue;
+    for (const o of seg.obs) if (o.spill) drawObstacle(ctx, o, seg.y);
+  }
   drawMeltTrail(ctx, g);
 
   for (const q of g.particles) {

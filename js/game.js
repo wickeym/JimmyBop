@@ -136,6 +136,10 @@ function pushSegment(g, spec) {
         w: o.w,
         h: o.h,
         cleared: false,
+        yard: true,
+        tip: 0,
+        sink: 0,
+        spill: false,
       });
     }
   }
@@ -188,10 +192,10 @@ function pushSegment(g, spec) {
 }
 
 const INTRO = [
-  { kind: "ground", w: 380, coins: 5 },
+  { kind: "ground", w: 380, coins: 5, obs: [{ k: "fence", w: 28, h: 16, at: 220 }] },
   { kind: "ground", w: 360, obs: [{ k: "crate", w: 22, h: 22, at: 80 }] },
   { kind: "gap", w: 62, arc: true },
-  { kind: "ground", w: 320, coins: 4 },
+  { kind: "ground", w: 320, coins: 4, obs: [{ k: "mailbox", w: 14, h: 26, at: 170 }] },
   { kind: "pit", w: 220, sign: "COOL OFF" },
   { kind: "ground", w: 300, coins: 4, slugs: [{ at: 150, vx: 18 }] },
   {
@@ -210,9 +214,11 @@ const INTRO = [
 
 function randomObs(rng, pressure) {
   const r = rng();
-  if (r < 0.26) return { k: "crate", w: 22, h: 22 };
-  if (r < 0.48) return { k: "lamp", w: 16, h: 28 };
-  if (r < 0.7) return { k: "rock", w: 32, h: 16 };
+  if (r < 0.18) return { k: "fence", w: 28, h: 16 };
+  if (r < 0.36) return { k: "mailbox", w: 14, h: 26 };
+  if (r < 0.52) return { k: "car", w: 36, h: 16 };
+  if (r < 0.68) return { k: "crate", w: 22, h: 22 };
+  if (r < 0.82) return { k: "rock", w: 32, h: 16 };
   const extra = Math.min(18, Math.floor(pressure * 8));
   const tall = 32 + Math.floor(rng() * (10 + extra));
   return { k: "pillar", w: 18, h: tall };
@@ -431,7 +437,10 @@ function nearSegments(g, x) {
 function solidWalls(s) {
   if (s.kind !== "ground") return [];
   const rects = [{ x: s.x, y: s.y, w: s.w, h: 640 }];
-  for (const o of s.obs) rects.push({ x: o.x, y: s.y - o.h, w: o.w, h: o.h });
+  for (const o of s.obs) {
+    if ((o.sink || 0) > 0.4) continue;
+    rects.push({ x: o.x, y: s.y - o.h, w: o.w, h: o.h });
+  }
   return rects;
 }
 
@@ -439,12 +448,49 @@ function floorsOf(s) {
   if (s.kind === "gap") return [];
   if (s.kind === "pit") return [{ x: s.x + 1, w: Math.max(4, s.w - 2), y: s.y + PIT_DEPTH, pit: true }];
   const list = [{ x: s.x, w: s.w, y: s.y, pit: false }];
-  for (const o of s.obs) list.push({ x: o.x, w: o.w, y: s.y - o.h, pit: false });
+  for (const o of s.obs) {
+    if ((o.sink || 0) > 0.4) continue;
+    list.push({ x: o.x, w: o.w, y: s.y - o.h, pit: false });
+  }
   return list;
 }
 
 function feetOverlap(x, f) {
   return x + 5 > f.x && x - 5 < f.x + f.w;
+}
+
+function stepProps(g, dt) {
+  for (const s of g.segments) {
+    if (s.kind !== "ground") continue;
+    for (let i = s.obs.length - 1; i >= 0; i--) {
+      const o = s.obs[i];
+      if (!o.yard || g.lavaX < o.x + 2) continue;
+      if (!o.spill) {
+        o.spill = true;
+        o.melt = 0;
+        g.sfx.push("splash");
+        burst(g, o.x + o.w * 0.5, GROUND_Y - o.h * 0.4, 10, "#ffd36a", 160);
+      }
+      o.melt = Math.min(1, (o.melt || 0) + dt * 0.55);
+      o.tip = Math.min(0.22, o.melt * 0.28);
+      o.sink = o.melt;
+      if (g.particles.length < 280 && Math.random() < dt * 14) {
+        const cut = GROUND_Y - o.h * (1 - o.melt);
+        g.particles.push({
+          x: o.x + Math.random() * o.w,
+          y: cut,
+          vx: 20 + Math.random() * 40,
+          vy: -10 - Math.random() * 30,
+          life: 0.45,
+          max: 0.45,
+          color: Math.random() < 0.4 ? "#fff1c2" : "#ff6a1a",
+          r: 1.4 + Math.random() * 1.6,
+          grav: 420,
+        });
+      }
+      if (o.melt > 0.97) s.obs.splice(i, 1);
+    }
+  }
 }
 
 function resolveX(g, p) {
@@ -566,6 +612,7 @@ function tryLand(g, p, prevY) {
     g.sfx.push("land");
     g.shake = Math.max(g.shake, Math.min(3.5, impact / 340));
     burst(g, p.x, p.y, 5, "#ffffff", 50);
+    if (p.x - g.lavaX < 96) burst(g, p.x - 10, p.y - 4, 6, "#ff8a3c", 90);
   }
   return true;
 }
@@ -1095,6 +1142,7 @@ function stepPlay(g, dt, input) {
   } else if (p.mercy > 0) lspd *= 0.7;
   g.lavaX += lspd * dt;
   lead = p.x - g.lavaX;
+  stepProps(g, dt);
 
   for (const s of g.segments) {
     if (s.kind === "pit") s.fill = clamp((g.lavaX - s.x) / s.w, 0, 1);

@@ -1,8 +1,8 @@
-import { createBot } from "./bot.js";
-import { createAudio } from "./audio.js";
-import { draw } from "./draw.js";
-import { fetchBoard, qualifies, submitScore } from "./board.js";
-import { STEP, VIEW_H, VIEW_W, createGame, lookAhead, pullSfx, startRun, update } from "./game.js";
+import { createBot } from "./bot.js?v=walk";
+import { createAudio } from "./audio.js?v=walk";
+import { draw } from "./draw.js?v=block";
+import { fetchBoard, qualifies, submitScore } from "./board.js?v=walk";
+import { STEP, VIEW_H, VIEW_W, createGame, lookAhead, pullSfx, startRun, update } from "./game.js?v=walk";
 
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
